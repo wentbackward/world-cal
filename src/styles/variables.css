@@ -1,0 +1,36 @@
+/* World-Cal CSS Custom Properties */
+:root {
+  /* Shading */
+  --color-core: #dcfce7;
+  --color-extended: #fef3c7;
+  --color-outside: #ffffff;
+
+  /* Selection */
+  --color-selection: #93c5fd;
+  --color-selection-border: #3b82f6;
+
+  /* Grid */
+  --color-grid-border: #e5e7eb;
+  --color-grid-header-bg: #f9fafb;
+  --color-grid-today-bg: #eff6ff;
+
+  /* Typography */
+  --color-text-primary: #111827;
+  --color-text-secondary: #6b7280;
+  --color-text-muted: #9ca3af;
+
+  /* Timezone headers */
+  --color-tz-primary-border: #3b82f6;
+  --color-tz-primary-bg: #eff6ff;
+
+  /* Buttons */
+  --color-btn-primary: #3b82f6;
+  --color-btn-primary-hover: #2563eb;
+  --color-btn-secondary: #e5e7eb;
+  --color-btn-secondary-hover: #d1d5db;
+
+  /* Spacing */
+  --spacing-cell-height: 32px;
+  --spacing-time-axis-width: 50px;
+  --spacing-tz-header-width: 120px;
+}
