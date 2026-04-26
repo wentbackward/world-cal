@@ -1,36 +1,41 @@
 /* World-Cal CSS Custom Properties */
 :root {
+  /* Background */
+  --bg-primary: #0f1419;
+  --bg-secondary: #1a1f25;
+  --bg-elevated: #24292f;
+
   /* Shading */
-  --color-core: #dcfce7;
-  --color-extended: #fef3c7;
-  --color-outside: #ffffff;
+  --color-core: rgba(63, 185, 80, 0.12);
+  --color-extended: rgba(210, 153, 34, 0.12);
+  --color-outside: transparent;
 
   /* Selection */
-  --color-selection: #93c5fd;
-  --color-selection-border: #3b82f6;
+  --color-selection: rgba(88, 166, 255, 0.15);
+  --color-selection-border: rgba(88, 166, 255, 0.6);
 
   /* Grid */
-  --color-grid-border: #e5e7eb;
-  --color-grid-header-bg: #f9fafb;
-  --color-grid-today-bg: #eff6ff;
+  --color-grid-border: rgba(255, 255, 255, 0.06);
+  --color-grid-header-bg: rgba(255, 255, 255, 0.03);
+  --color-grid-today-bg: rgba(88, 166, 255, 0.06);
 
   /* Typography */
-  --color-text-primary: #111827;
-  --color-text-secondary: #6b7280;
-  --color-text-muted: #9ca3af;
+  --color-text-primary: #f0f6fc;
+  --color-text-secondary: #8b949e;
+  --color-text-muted: #6e7681;
 
   /* Timezone headers */
-  --color-tz-primary-border: #3b82f6;
-  --color-tz-primary-bg: #eff6ff;
+  --color-tz-primary-border: #58a6ff;
+  --color-tz-primary-bg: rgba(88, 166, 255, 0.08);
 
   /* Buttons */
-  --color-btn-primary: #3b82f6;
-  --color-btn-primary-hover: #2563eb;
-  --color-btn-secondary: #e5e7eb;
-  --color-btn-secondary-hover: #d1d5db;
+  --color-btn-primary: #58a6ff;
+  --color-btn-primary-hover: #79c0ff;
+  --color-btn-secondary: rgba(255, 255, 255, 0.06);
+  --color-btn-secondary-hover: rgba(255, 255, 255, 0.1);
 
   /* Spacing */
-  --spacing-cell-height: 32px;
-  --spacing-time-axis-width: 50px;
+  --spacing-cell-height: 36px;
+  --spacing-time-axis-width: 56px;
   --spacing-tz-header-width: 120px;
 }
