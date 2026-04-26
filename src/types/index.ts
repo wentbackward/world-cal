@@ -31,3 +31,5 @@ export interface ExportLinks {
   gmail: string;
   office: string;
 }
+
+export type Theme = Record<string, string>;
