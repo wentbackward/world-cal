@@ -1,27 +1,32 @@
-import { useState } from 'react'
-import './App.css'
+import { AppStateProvider, useAppState } from './hooks/useAppState';
+import { ThemeProvider } from './hooks/useTheme';
+import { useUrlSync } from './hooks/useUrlSync';
+import Header from './components/Header';
+import CalendarGrid from './components/CalendarGrid';
+import SelectionPanel from './components/SelectionPanel';
+import './App.css';
 
-function App() {
-  const [count, setCount] = useState(0)
+function AppContent() {
+  const { state } = useAppState();
+  useUrlSync(state);
 
   return (
     <div className="app">
-      <header className="app-header">
-        <h1>World-Cal</h1>
-        <p className="tagline">Find the perfect time across timezones</p>
-      </header>
+      <Header />
       <main className="app-main">
-        <div className="card">
-          <button onClick={() => setCount((count) => count + 1)}>
-            count is {count}
-          </button>
-          <p>
-            Edit <code>src/App.tsx</code> and save to test HMR
-          </p>
-        </div>
+        <CalendarGrid />
+        <SelectionPanel />
       </main>
     </div>
-  )
+  );
 }
 
-export default App
+export default function App() {
+  return (
+    <ThemeProvider>
+      <AppStateProvider>
+        <AppContent />
+      </AppStateProvider>
+    </ThemeProvider>
+  );
+}
