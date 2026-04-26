@@ -146,7 +146,12 @@ src/
 ├── hooks/
 │   ├── useAppState.ts         // State management
 │   ├── useUrlSync.ts          // URL ↔ state sync
-│   └── useDragSelection.ts    // Mouse event handling
+│   ├── useDragSelection.ts    // Mouse event handling
+│   └── useTheme.ts            // Theme consumption hook
+├── styles/
+│   ├── variables.css          // All CSS custom properties
+│   ├── grid.css               // Calendar grid layout
+│   └── components.css         // Component-specific styles
 ├── utils/
 │   ├── timezone.ts            // Timezone utilities, city code mapping
 │   ├── shading.ts             // Core/extended/outside hours logic
@@ -154,6 +159,86 @@ src/
 │   └── url.ts                 // URL parsing and encoding
 └── types/
     └── index.ts               // TypeScript type definitions
+```
+
+## Theming
+
+All visual styling is controlled via CSS custom properties (CSS variables) defined in `styles/variables.css`. This makes the entire color scheme swappable without touching component logic.
+
+### CSS Variables
+
+```css
+:root {
+  /* Shading */
+  --color-core: #dcfce7;           /* green background */
+  --color-extended: #fef3c7;       /* yellow background */
+  --color-outside: #ffffff;        /* white background */
+
+  /* Selection */
+  --color-selection: #93c5fd;      /* blue highlight */
+  --color-selection-border: #3b82f6;
+
+  /* Grid */
+  --color-grid-border: #e5e7eb;
+  --color-grid-header-bg: #f9fafb;
+  --color-grid-today-bg: #eff6ff;  /* today column highlight */
+
+  /* Typography */
+  --color-text-primary: #111827;
+  --color-text-secondary: #6b7280;
+  --color-text-muted: #9ca3af;
+
+  /* Timezone headers */
+  --color-tz-primary-border: #3b82f6;
+  --color-tz-primary-bg: #eff6ff;
+
+  /* Buttons */
+  --color-btn-primary: #3b82f6;
+  --color-btn-primary-hover: #2563eb;
+  --color-btn-secondary: #e5e7eb;
+  --color-btn-secondary-hover: #d1d5db;
+
+  /* Spacing */
+  --spacing-cell-height: 32px;     /* height of each half-hour row */
+  --spacing-time-axis-width: 50px; /* width of left time labels */
+  --spacing-tz-header-width: 120px;
+}
+```
+
+### Theme API
+
+A `Theme` type and `useTheme` hook provide programmatic access:
+
+```typescript
+type Theme = Record<string, string>;
+
+interface ThemeContext {
+  current: Theme;
+  set: (theme: Theme) => void;
+}
+```
+
+The default theme is loaded from `variables.css`. Corporate integrations can override by:
+
+1. **CSS override** — Drop in a new CSS file that redefines the variables
+2. **Inline style override** — Set `style="--color-core: #e8f5e9"` on the root element
+3. **Programmatic** — Call `useTheme().set({ "--color-core": "#e8f5e9" })` from a parent app
+
+The `shading.ts` utility returns a CSS class name (`core`, `extended`, or `outside`) — it never references colors directly. Components apply these classes, and CSS variables determine the actual colors.
+
+### Integration Example
+
+A corporate site embedding World-Cal could do:
+
+```html
+<div id="world-cal" style="--color-core: #1a73e8; --color-extended: #e8f0fe; --color-text-primary: #202124;">
+  <!-- embedded calendar -->
+</div>
+```
+
+Or pass a theme object via a query parameter:
+```
+?theme=corporate&color-core=%231a73e8&color-extended=%23e8f0fe
 ```
 
 ## Error Handling
