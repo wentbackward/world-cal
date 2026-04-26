@@ -24,7 +24,7 @@ AppState {
   primaryTz: string          // e.g., "Europe/London"
   secondaryTz: string[]      // e.g., ["Asia/Hong_Kong", "America/New_York"]
   coreHours: { start: number, end: number }  // default {8, 18}
-  extHours: { start: number, end: number }   // default {6, 8} morning, {18, 22} evening
+  extHours: { morning: { start: number, end: number }, evening: { start: number, end: number } }   // default {6,8} morning, {18,22} evening
   selection: {
     start: Date              // start of selected range (in primary TZ)
     end: Date                // end of selected range (in primary TZ)
@@ -43,7 +43,7 @@ Compact city-code format:
 |-------|---------|---------|
 | Timezones | `?L,HK,NYC` | Primary: London, Secondary: Hong Kong, New York |
 | Work hours | `?core=9,17` | Core hours 9am–5pm |
-| Extended hours | `?ext=7,9,17,21` | Extended: 7–9am, 5–9pm |
+| Extended hours | `?ext=7,9,17,21` | Extended: 7–9am, 5–9pm (morning start, morning end, evening start, evening end) |
 
 City codes map to known timezones:
 - `LON` → `Europe/London`, `L` → `Europe/London`
@@ -109,7 +109,7 @@ Time conversion uses `Intl.DateTimeFormat` with the target timezone's `hour` and
 
 Per-timezone shading:
 - **Core hours** (default 8am–6pm local time): Green background
-- **Extended hours** (default 6–8am, 6–10pm local time): Yellow background
+- **Extended hours** (default 6–8am and 6–10pm local time): Yellow background
 - **Outside hours**: No shading (white/transparent)
 
 ### Timezone Picker
