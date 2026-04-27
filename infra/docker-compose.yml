@@ -1,0 +1,35 @@
+# ─────────────────────────────────────────────────────────
+# Infrastructure for paulgresham.com subdomain apps
+# ─────────────────────────────────────────────────────────
+#
+# Usage:
+#   1. Edit Caddyfile to add new app routes
+#   2. Run ./deploy.sh to push to VPS
+#   3. New apps auto-get HTTPS via Caddy
+#
+# Existing containers (test/prod) are preserved and routed
+# through Caddy alongside new subdomain apps.
+# ─────────────────────────────────────────────────────────
+
+services:
+  caddy:
+    image: caddy:latest
+    container_name: caddy-proxy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    restart: unless-stopped
+    networks:
+      - app-net
+
+networks:
+  app-net:
+    driver: bridge
+
+volumes:
+  caddy_data:
+  caddy_config:
