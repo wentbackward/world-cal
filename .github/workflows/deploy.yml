@@ -71,8 +71,8 @@ jobs:
           script: |
             IMAGE_TAG="${{ env.IMAGE_TAG }}:${{ github.sha }}"
 
-            # Create network if needed
-            docker network create app-net 2>/dev/null || true
+            # Create network if needed (match infra docker-compose network)
+            docker network create infra_app-net 2>/dev/null || true
 
             # Pull image
             echo "Pulling image ${IMAGE_TAG}..."
@@ -82,11 +82,11 @@ jobs:
             docker stop world-cal 2>/dev/null || true
             docker rm world-cal 2>/dev/null || true
 
-            # Start new container
+            # Start new container on the same network as Caddy
             echo "Starting world-cal container..."
             docker run -d \
               --name world-cal \
-              --network app-net \
+              --network infra_app-net \
               --restart unless-stopped \
               -e GIT_SHA=${{ github.sha }} \
               ${IMAGE_TAG}
