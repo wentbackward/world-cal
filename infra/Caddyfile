@@ -2,14 +2,25 @@
 # Caddy Reverse Proxy Configuration
 # ─────────────────────────────────────────────────────────
 #
-# Each subdomain routes to a container on the app-net network.
-# Add new apps by adding a block below.
+# Handles ALL subdomain traffic. Bare domain (paulgresham.com)
+# and www stay on Hostinger managed hosting.
 #
-# Existing containers (test/prod) are routed by their ports.
-# Update the port numbers to match your existing setup.
+# Add new apps by adding a block below.
 # ─────────────────────────────────────────────────────────
 
-# ── Subdomain Apps ──────────────────────────────────────
+# ── Crisis Monitor ───────────────────────────────────────
+# Existing containers, currently exposed on ports 3001/3002.
+# Now routed through Caddy with automatic HTTPS.
+
+crisis.paulgresham.com {
+    reverse_proxy localhost:3002
+}
+
+crisis-test.paulgresham.com {
+    reverse_proxy localhost:3001
+}
+
+# ── Subdomain Apps ───────────────────────────────────────
 # Each app runs as its own container on the app-net network.
 # Caddy discovers them by container name.
 
@@ -20,24 +31,4 @@ world-cal.paulgresham.com {
 # Add new apps here:
 # another-app.paulgresham.com {
 #     reverse_proxy another-app:80
-# }
-
-# ── Existing Containers ─────────────────────────────────
-# Route to your existing test/prod containers by port.
-# Replace the port numbers with your actual ports.
-
-# Example: test environment on port 3000
-# test.paulgresham.com {
-#     reverse_proxy localhost:3000
-# }
-
-# Example: production on port 8080
-# paulgresham.com {
-#     reverse_proxy localhost:8080
-# }
-
-# ── Global Settings ─────────────────────────────────────
-# Uncomment to enable global compression and security headers
-# {
-#     auto_https off  # Disable if you want manual HTTPS control
 # }

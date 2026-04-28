@@ -1,57 +1,46 @@
 #!/usr/bin/env bash
+set -euo pipefail
+
 # ─────────────────────────────────────────────────────────
 # Deploy infrastructure to VPS
 # ─────────────────────────────────────────────────────────
 #
 # Usage:
-#   ./deploy.sh [environment]
-#
-# Environments:
-#   staging  - Deploy to staging (default)
-#   production - Deploy to production
+#   ./deploy.sh
 #
 # Prerequisites:
-#   - SSH key configured for VPS access
-#   - VPS_HOST, VPS_USER, VPS_SSH_KEY env vars or SSH config
+#   - SSH key at ~/.ssh/id_deploy (matching crisis_monitor convention)
+#   - deploy user on VPS
 # ─────────────────────────────────────────────────────────
 
-set -euo pipefail
-
+VPS_HOST="187.124.241.43"
+VPS_USER="deploy"
+SSH_KEY="${HOME}/.ssh/id_deploy"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-INFRA_DIR="$SCRIPT_DIR/infra"
 
-# Configuration - override via environment variables
-VPS_HOST="${VPS_HOST:?Set VPS_HOST environment variable}"
-VPS_USER="${VPS_USER:-root}"
-VPS_SSH_KEY="${VPS_SSH_KEY:-~/.ssh/vps_deploy}"
-ENVIRONMENT="${1:-staging}"
-
-echo "🚀 Deploying infrastructure to ${ENVIRONMENT}..."
-echo "   Target: ${VPS_USER}@${VPS_HOST}"
+echo "🚀 Deploying infrastructure to ${VPS_USER}@${VPS_HOST}..."
 
 # Create remote infra directory
-ssh -i "$VPS_SSH_KEY" "${VPS_USER}@${VPS_HOST}" "mkdir -p ~/infra"
+ssh -i "$SSH_KEY" "${VPS_USER}@${VPS_HOST}" "mkdir -p ~/infra"
 
 # Sync infrastructure files
 rsync -avz --delete \
-  -e "ssh -i ${VPS_SSH_KEY}" \
-  "$INFRA_DIR/" \
+  -e "ssh -i ${SSH_KEY}" \
+  "$SCRIPT_DIR/" \
   "${VPS_USER}@${VPS_HOST}:~/infra/"
 
-# Deploy to VPS
-ssh -i "$VPS_SSH_KEY" "${VPS_USER}@${VPS_HOST}" << 'SSH_SCRIPT'
+# Deploy on VPS
+ssh -i "$SSH_KEY" "${VPS_USER}@${VPS_HOST}" << 'SSH_SCRIPT'
 cd ~/infra
 
-# Pull latest images
+# Create network
+docker network create app-net 2>/dev/null || true
+
+# Pull and start Caddy
 docker compose pull
-
-# Restart services
 docker compose up -d
-
-# Clean up old images
-docker image prune -f
 
 echo "✅ Infrastructure deployed successfully"
 SSH_SCRIPT
 
-echo "✨ Done! Infrastructure is live at https://world-cal.paulgresham.com"
+echo "✨ Done! Caddy is live on :80/:443"
