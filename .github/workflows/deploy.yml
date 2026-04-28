@@ -74,6 +74,9 @@ jobs:
             # Create network if needed (match infra docker-compose network)
             docker network create infra_app-net 2>/dev/null || true
 
+            # Authenticate to GHCR
+            echo '${{ secrets.GHCR_TOKEN }}' | docker login ghcr.io -u wentbackward --password-stdin
+
             # Pull image
             echo "Pulling image ${IMAGE_TAG}..."
             docker pull ${IMAGE_TAG}
