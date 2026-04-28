@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 env:
-  IMAGE_TAG: ghcr.io/pgallc/world_cal
+  IMAGE_TAG: ghcr.io/wentbackward/world_cal
 
 jobs:
   # ── Stage 1: Unit Tests (Gate) ──────────────────────────────────
