@@ -9,12 +9,13 @@ set -euo pipefail
 #   ./deploy.sh
 #
 # Prerequisites:
-#   - SSH key at ~/.ssh/id_deploy (matching crisis_monitor convention)
+#   - SSH key at ~/.ssh/id_deploy
 #   - deploy user on VPS
+#   - Set VPS_HOST env var (e.g., export VPS_HOST=1.2.3.4)
 # ─────────────────────────────────────────────────────────
 
-VPS_HOST="187.124.241.43"
-VPS_USER="deploy"
+VPS_HOST="${VPS_HOST:?Set VPS_HOST environment variable}"
+VPS_USER="${VPS_USER:-deploy}"
 SSH_KEY="${HOME}/.ssh/id_deploy"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
