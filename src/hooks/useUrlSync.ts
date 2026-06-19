@@ -3,8 +3,8 @@ import type { AppState } from '../types';
 import { buildUrlQuery, syncUrl } from '../utils/url';
 
 /**
- * Sync app state to URL on configuration changes.
- * Only syncs configuration (not selection, which is transient).
+ * Sync app state to URL on configuration changes, including the selected
+ * appointment window so the URL is fully shareable.
  */
 export function useUrlSync(state: AppState): void {
   useEffect(() => {
@@ -13,7 +13,8 @@ export function useUrlSync(state: AppState): void {
       secondaryTz: state.secondaryTz,
       coreHours: state.coreHours,
       extHours: state.extHours,
+      selection: state.selection,
     });
     syncUrl(query);
-  }, [state.primaryTz, state.secondaryTz, state.coreHours, state.extHours]);
+  }, [state.primaryTz, state.secondaryTz, state.coreHours, state.extHours, state.selection]);
 }

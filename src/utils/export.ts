@@ -1,25 +1,34 @@
 import type { ExportLinks, TimeRange } from '../types';
 
 
+const DEFAULT_DESCRIPTION = 'Created with World-Cal';
+
 /**
  * Generate export links for a given time selection.
  */
-export function generateExportLinks(selection: TimeRange, primaryTz: string, title: string = 'Meeting'): ExportLinks {
+export function generateExportLinks(
+  selection: TimeRange,
+  primaryTz: string,
+  title: string = 'Meeting',
+  description: string = DEFAULT_DESCRIPTION
+): ExportLinks {
   const startFormatted = formatDateForExport(selection.start);
   const endFormatted = formatDateForExport(selection.end);
+  const details = description || DEFAULT_DESCRIPTION;
 
   return {
-    ical: generateICalLink(selection, primaryTz, title),
-    google: generateGoogleLink(startFormatted, endFormatted, title),
-    gmail: generateGmailLink(startFormatted, endFormatted, title),
-    office: generateOfficeLink(startFormatted, endFormatted, title),
+    ical: generateICalLink(selection, primaryTz, title, details),
+    google: generateGoogleLink(startFormatted, endFormatted, title, details),
+    gmail: generateGmailLink(title, details),
+    // Outlook's deeplink expects ISO 8601 datetimes, not the compact iCal format.
+    office: generateOfficeLink(formatDateISO(selection.start), formatDateISO(selection.end), title, details),
   };
 }
 
 /**
  * Generate iCal (.ics) file content as a data URL.
  */
-function generateICalLink(selection: TimeRange, tz: string, title: string): string {
+function generateICalLink(selection: TimeRange, tz: string, title: string, description: string): string {
   const icsContent = [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
@@ -28,7 +37,7 @@ function generateICalLink(selection: TimeRange, tz: string, title: string): stri
     `DTSTART:${formatDateForICal(selection.start)}`,
     `DTEND:${formatDateForICal(selection.end)}`,
     `SUMMARY:${escapeICal(title)}`,
-    'DESCRIPTION:Created with World-Cal',
+    `DESCRIPTION:${escapeICal(description)}`,
     `TZID:${tz}`,
     'STATUS:TENTATIVE',
     'END:VEVENT',
@@ -41,27 +50,28 @@ function generateICalLink(selection: TimeRange, tz: string, title: string): stri
 /**
  * Generate Google Calendar link.
  */
-function generateGoogleLink(start: string, end: string, title: string): string {
+function generateGoogleLink(start: string, end: string, title: string, description: string): string {
   const encodedTitle = encodeURIComponent(title);
-  return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodedTitle}&dates=${start}/${end}&sprop=&sprop=name:`;
+  const encodedDetails = encodeURIComponent(description);
+  return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodedTitle}&dates=${start}/${end}&details=${encodedDetails}`;
 }
 
 /**
- * Generate Gmail link with event details.
+ * Generate Gmail compose link with the meeting details in the body.
  */
-function generateGmailLink(start: string, end: string, title: string): string {
+function generateGmailLink(title: string, description: string): string {
   const encodedSubject = encodeURIComponent(title);
-  const body = `Scheduled time: ${start} to ${end}`;
-  const encodedBody = encodeURIComponent(body);
+  const encodedBody = encodeURIComponent(description);
   return `https://mail.google.com/mail/?view=cm&fs=1&su=${encodedSubject}&body=${encodedBody}`;
 }
 
 /**
  * Generate Microsoft Outlook link.
  */
-function generateOfficeLink(start: string, end: string, title: string): string {
+function generateOfficeLink(startIso: string, endIso: string, title: string, description: string): string {
   const encodedSubject = encodeURIComponent(title);
-  return `https://outlook.office.com/calendar/0/deeplink/compose?path=/calendar/action/compose&rru=addevent&subject=${encodedSubject}&startdt=${start}&enddt=${end}`;
+  const encodedBody = encodeURIComponent(description);
+  return `https://outlook.office.com/calendar/0/deeplink/compose?path=/calendar/action/compose&rru=addevent&subject=${encodedSubject}&body=${encodedBody}&startdt=${encodeURIComponent(startIso)}&enddt=${encodeURIComponent(endIso)}`;
 }
 
 /**
@@ -85,8 +95,15 @@ function formatDateForICal(date: Date): string {
 }
 
 /**
+ * Format date as ISO 8601 with a trailing Z and no milliseconds (2024-06-15T14:00:00Z).
+ */
+function formatDateISO(date: Date): string {
+  return date.toISOString().replace(/\.\d{3}Z$/, 'Z');
+}
+
+/**
  * Escape special characters in iCal strings.
  */
 function escapeICal(str: string): string {
-  return str.replace(/[\\\,;]/g, '\\$&');
+  return str.replace(/[\\,;]/g, '\\$&').replace(/\n/g, '\\n');
 }

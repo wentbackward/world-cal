@@ -22,7 +22,10 @@ export type ShadingClass = 'core' | 'extended' | 'outside';
 export interface TimeZoneEntry {
   tz: string;
   label: string;
-  shortCode: string;
+  country: string;
+  shortCode?: string;
+  /** Additional names this zone can be found under (e.g. other countries it covers). */
+  aliases?: string[];
 }
 
 export interface ExportLinks {

@@ -1,4 +1,4 @@
-import type { HourRange } from '../types';
+import type { HourRange, TimeRange } from '../types';
 import { CITY_CODE_MAP, getTimeZone } from '../lib/city-codes';
 
 const DEFAULT_CORE: HourRange = { start: 8, end: 18 };
@@ -9,6 +9,12 @@ interface UrlParams {
   secondaryTz: string[];
   coreHours?: HourRange;
   extHours?: HourRange;
+  selection?: TimeRange;
+}
+
+/** ISO 8601 with a trailing Z and no milliseconds (2024-06-15T14:00:00Z). */
+function toIso(date: Date): string {
+  return date.toISOString().replace(/\.\d{3}Z$/, 'Z');
 }
 
 /**
@@ -19,7 +25,7 @@ export function parseUrlParams(search: string = window.location.search): Partial
   const urlParams = new URLSearchParams(search);
 
   // Timezone codes (comma-separated)
-  const tzParam = urlParams.get('tz') || urlParams.get('');
+  const tzParam = urlParams.get('tz');
   if (tzParam) {
     const codes = tzParam.split(',').map((c) => c.trim()).filter(Boolean);
     if (codes.length > 0) {
@@ -49,6 +55,17 @@ export function parseUrlParams(search: string = window.location.search): Partial
     }
   }
 
+  // Selected appointment window: "sel=<startIso>/<endIso>"
+  const selParam = urlParams.get('sel');
+  if (selParam) {
+    const [startStr, endStr] = selParam.split('/');
+    const start = startStr ? new Date(startStr) : null;
+    const end = endStr ? new Date(endStr) : null;
+    if (start && end && !Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime())) {
+      params.selection = { start, end };
+    }
+  }
+
   return params;
 }
 
@@ -60,6 +77,7 @@ export function buildUrlQuery(params: {
   secondaryTz: string[];
   coreHours?: HourRange;
   extHours?: HourRange;
+  selection?: TimeRange | null;
 }): string {
   const segments: string[] = [];
 
@@ -74,7 +92,7 @@ export function buildUrlQuery(params: {
       return tz;
     })
     .join(',');
-  segments.push(codes);
+  segments.push(`tz=${codes}`);
 
   // Core hours (only if non-default)
   if (params.coreHours && (!areEqualRanges(params.coreHours, DEFAULT_CORE))) {
@@ -84,6 +102,11 @@ export function buildUrlQuery(params: {
   // Extended hours (only if non-default)
   if (params.extHours && (!areEqualRanges(params.extHours, DEFAULT_EXT))) {
     segments.push(`ext=${params.extHours.start},${params.extHours.end}`);
+  }
+
+  // Selected appointment window
+  if (params.selection) {
+    segments.push(`sel=${toIso(params.selection.start)}/${toIso(params.selection.end)}`);
   }
 
   return '?' + segments.join('&');

@@ -1,5 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
-import type { TimeRange } from '../types';
+import { useState, useCallback } from 'react';
 
 interface SelectionState {
   isDragging: boolean;
@@ -13,18 +12,23 @@ interface DragHandlers {
   onMouseUp: () => void;
 }
 
+/** A selected block of grid cells (inclusive row/column bounds). */
+export interface CellRange {
+  startRow: number;
+  endRow: number;
+  startCol: number;
+  endCol: number;
+}
+
 export function useDragSelection(
-  onSelection: (selection: TimeRange | null) => void,
-  gridSize: { cols: number; rows: number },
-  baseDate: Date
+  onSelection: (cells: CellRange | null) => void,
+  gridSize: { cols: number; rows: number }
 ) {
   const [state, setState] = useState<SelectionState>({
     isDragging: false,
     startCell: null,
     endCell: null,
   });
-  const _gridRef = useRef<HTMLDivElement>(null);
-  void _gridRef;
 
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
@@ -71,23 +75,15 @@ export function useDragSelection(
       return;
     }
 
-    const startRow = Math.min(state.startCell.row, state.endCell.row);
-    const endRow = Math.max(state.startCell.row, state.endCell.row);
-
-    // Convert row indices to time (each row = 30 minutes)
-    const startMinutes = startRow * 30;
-    const endMinutes = (endRow + 1) * 30;
-
-    // Create dates for the selection
-    const startDate = new Date(baseDate);
-    startDate.setHours(Math.floor(startMinutes / 60), startMinutes % 60, 0, 0);
-
-    const endDate = new Date(baseDate);
-    endDate.setHours(Math.floor(endMinutes / 60), endMinutes % 60, 0, 0);
-
-    onSelection({ start: startDate, end: endDate });
+    // Report the selected cells; the grid maps rows/columns to a timezone-aware range.
+    onSelection({
+      startRow: Math.min(state.startCell.row, state.endCell.row),
+      endRow: Math.max(state.startCell.row, state.endCell.row),
+      startCol: Math.min(state.startCell.col, state.endCell.col),
+      endCol: Math.max(state.startCell.col, state.endCell.col),
+    });
     setState({ isDragging: false, startCell: null, endCell: null });
-  }, [state, onSelection, baseDate]);
+  }, [state, onSelection]);
 
   const overlayStyle: React.CSSProperties = state.isDragging && state.startCell && state.endCell
     ? {

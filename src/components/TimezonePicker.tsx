@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, memo } from 'react';
 import { useAppState } from '../hooks/useAppState';
 import { getAllTimeZones } from '../lib/city-codes';
+import { getOffsetLabel } from '../utils/timezone';
 
 const TimezonePicker = memo(() => {
   const { state, addSecondaryTz } = useAppState();
@@ -15,7 +16,12 @@ const TimezonePicker = memo(() => {
     if (usedTimeZones.has(tz.tz)) return false;
     if (!search) return true;
     const q = search.toLowerCase();
-    return tz.label.toLowerCase().includes(q) || tz.tz.toLowerCase().includes(q);
+    return (
+      tz.label.toLowerCase().includes(q) ||
+      tz.country.toLowerCase().includes(q) ||
+      tz.tz.toLowerCase().includes(q) ||
+      (tz.aliases?.some((a) => a.toLowerCase().includes(q)) ?? false)
+    );
   });
 
   useEffect(() => {
@@ -37,10 +43,12 @@ const TimezonePicker = memo(() => {
   return (
     <div className="timezone-picker">
       <button
-        className="btn btn--add"
+        className="btn btn--icon"
         onClick={() => setIsOpen(!isOpen)}
+        title="Add timezone"
+        aria-label="Add timezone"
       >
-        + Add Timezone
+        +
       </button>
 
       {isOpen && (
@@ -48,12 +56,12 @@ const TimezonePicker = memo(() => {
           <input
             ref={inputRef}
             type="text"
-            placeholder="Search timezones..."
+            placeholder="Search by city or country..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="picker-input"
           />
-          
+
           <div className="picker-list">
             {filtered.length === 0 ? (
               <div className="picker-empty">No matching timezones</div>
@@ -68,8 +76,11 @@ const TimezonePicker = memo(() => {
                     setSearch('');
                   }}
                 >
-                  <span className="picker-label">{tz.label}</span>
-                  <span className="picker-code">{tz.shortCode}</span>
+                  <span className="picker-text">
+                    <span className="picker-label">{tz.label}</span>
+                    {tz.country && <span className="picker-country">{tz.country}</span>}
+                  </span>
+                  <span className="picker-code">{getOffsetLabel(tz.tz)}</span>
                 </button>
               ))
             )}

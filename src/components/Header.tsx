@@ -11,8 +11,14 @@ export default function Header() {
   return (
     <header className="app-header">
       <div className="header-brand">
-        <h1>World-Cal</h1>
-        <p className="tagline">Find the perfect time across timezones</p>
+        <h1 className="app-title">
+          <span className="app-title-brand">World-Cal</span>
+          <span className="app-title-desc">Meeting Time Planner Across Time Zones</span>
+        </h1>
+        <p className="tagline">
+          Find a meeting time that works in every time zone — drag to pick a slot, see the local time and day for each
+          city, then export to Google Calendar, Outlook, Gmail, or iCal.
+        </p>
       </div>
 
       <div className="header-controls">

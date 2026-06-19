@@ -10,6 +10,7 @@ interface AppStateContextValue {
   removeSecondaryTz: (tz: string) => void;
   swapTz: (tz: string) => void;
   setSelection: (selection: TimeRange | null) => void;
+  setViewDate: (date: Date) => void;
 }
 
 const AppStateContext = createContext<AppStateContextValue | null>(null);
@@ -32,13 +33,24 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       ? urlParams.secondaryTz
       : defaults.secondaryTz.filter((tz) => tz !== primaryTz);
 
+    // If the URL carries a selection, open on the day that contains it (in the primary tz).
+    const selection = urlParams.selection ?? null;
+    let viewDate = new Date();
+    if (selection) {
+      const [y, m, d] = selection.start
+        .toLocaleDateString('en-CA', { timeZone: primaryTz })
+        .split('-')
+        .map(Number);
+      if (y && m && d) viewDate = new Date(y, m - 1, d);
+    }
+
     return {
       primaryTz,
       secondaryTz,
       coreHours: urlParams.coreHours || defaults.coreHours,
       extHours: urlParams.extHours || defaults.extHours,
-      selection: null as TimeRange | null,
-      viewDate: new Date(),
+      selection,
+      viewDate,
     };
   }, []);
 
@@ -81,6 +93,10 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     setState((prev) => ({ ...prev, selection }));
   }, []);
 
+  const setViewDate = useCallback((date: Date) => {
+    setState((prev) => ({ ...prev, viewDate: date, selection: null }));
+  }, []);
+
   const value = useMemo(
     () => ({
       state,
@@ -89,8 +105,9 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       removeSecondaryTz,
       swapTz,
       setSelection,
+      setViewDate,
     }),
-    [state, setPrimaryTz, addSecondaryTz, removeSecondaryTz, swapTz, setSelection]
+    [state, setPrimaryTz, addSecondaryTz, removeSecondaryTz, swapTz, setSelection, setViewDate]
   );
 
   return <AppStateContext.Provider value={value}>{children}</AppStateContext.Provider>;

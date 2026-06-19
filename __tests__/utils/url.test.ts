@@ -62,6 +62,34 @@ describe('buildUrlQuery', () => {
     expect(query).toContain('core=9,17');
     expect(query).toContain('ext=7,21');
   });
+
+  it('round-trips a selected appointment window', () => {
+    const selection = {
+      start: new Date('2024-06-15T14:00:00Z'),
+      end: new Date('2024-06-15T15:30:00Z'),
+    };
+    const query = buildUrlQuery({ primaryTz: 'Europe/London', secondaryTz: [], selection });
+    const parsed = parseUrlParams(query);
+    expect(parsed.selection?.start.toISOString()).toBe('2024-06-15T14:00:00.000Z');
+    expect(parsed.selection?.end.toISOString()).toBe('2024-06-15T15:30:00.000Z');
+  });
+
+  it('omits the selection when none is set', () => {
+    const query = buildUrlQuery({ primaryTz: 'Europe/London', secondaryTz: [] });
+    expect(query).not.toContain('sel=');
+  });
+
+  it('round-trips the timezone list through parseUrlParams', () => {
+    const query = buildUrlQuery({
+      primaryTz: 'Europe/London',
+      secondaryTz: ['Asia/Hong_Kong', 'America/New_York'],
+      coreHours: { start: 9, end: 17 },
+    });
+    const parsed = parseUrlParams(query);
+    expect(parsed.primaryTz).toBe('Europe/London');
+    expect(parsed.secondaryTz).toEqual(['Asia/Hong_Kong', 'America/New_York']);
+    expect(parsed.coreHours).toEqual({ start: 9, end: 17 });
+  });
 });
 
 describe('getDefaultConfig', () => {

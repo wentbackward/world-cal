@@ -39,4 +39,11 @@ describe('generateExportLinks', () => {
     expect(links.gmail).toContain('Client%20Call');
     expect(links.office).toContain('Client%20Call');
   });
+
+  it('injects the description into google, gmail, and outlook', () => {
+    const links = generateExportLinks(selection, primaryTz, 'Sync', 'Created with World-Cal');
+    expect(links.google).toContain('details=Created%20with%20World-Cal');
+    expect(links.gmail).toContain('body=Created%20with%20World-Cal');
+    expect(links.office).toContain('body=Created%20with%20World-Cal');
+  });
 });
