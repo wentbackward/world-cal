@@ -16,3 +16,23 @@ export async function copyToClipboard(text: string): Promise<void> {
     document.body.removeChild(area);
   }
 }
+
+/**
+ * Copy rich (HTML) content with a plain-text fallback, so rich editors get the
+ * formatting (bold, links) and plain/spreadsheet targets get the tab-separated text.
+ */
+export async function copyRich(html: string, text: string): Promise<void> {
+  try {
+    if (navigator.clipboard && typeof ClipboardItem !== 'undefined') {
+      const item = new ClipboardItem({
+        'text/html': new Blob([html], { type: 'text/html' }),
+        'text/plain': new Blob([text], { type: 'text/plain' }),
+      });
+      await navigator.clipboard.write([item]);
+      return;
+    }
+    throw new Error('Rich clipboard unavailable');
+  } catch {
+    await copyToClipboard(text);
+  }
+}

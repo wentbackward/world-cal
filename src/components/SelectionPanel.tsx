@@ -2,7 +2,10 @@ import { useState } from 'react';
 import { useAppState } from '../hooks/useAppState';
 import { generateExportLinks } from '../utils/export';
 import { formatTime, formatDate, getShortTzLabel } from '../utils/timezone';
-import { copyToClipboard } from '../utils/clipboard';
+import { copyRich } from '../utils/clipboard';
+
+const escapeHtml = (s: string) =>
+  s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
 export default function SelectionPanel() {
   const { state, setSelection } = useAppState();
@@ -30,10 +33,40 @@ export default function SelectionPanel() {
   // Calendar description: the times in every zone, plus a link back to this exact view.
   const description = `${timesText}\n\nCreated with World-Cal — ${window.location.href}`;
 
-  const links = generateExportLinks(selection, state.primaryTz, subject.trim() || 'Meeting', description);
+  const subjectText = subject.trim() || 'Meeting';
+  const links = generateExportLinks(selection, state.primaryTz, subjectText, description);
 
   const handleCopy = async () => {
-    await copyToClipboard(timesText);
+    const url = window.location.href;
+
+    // Plain text: subject, tab-separated rows, then the link (for spreadsheets / plain editors).
+    const plain = [
+      subjectText,
+      '',
+      ...rows.map((r) => `${getShortTzLabel(r.tz)}\t${r.startDate}\t${r.range}`),
+      '',
+      `Created with World-Cal — ${url}`,
+    ].join('\n');
+
+    // HTML: a table keeps the location bold and the columns aligned, and (unlike newlines in
+    // a pre-wrap div) pastes reliably across separate lines in Outlook, Word, and Gmail.
+    const cell = (content: string) => `<td style="padding:1px 18px 1px 0;vertical-align:top">${content}</td>`;
+    const htmlRows = rows
+      .map(
+        (r) =>
+          `<tr>${cell(`<b>${escapeHtml(getShortTzLabel(r.tz))}</b>`)}${cell(escapeHtml(r.startDate))}${cell(
+            escapeHtml(r.range)
+          )}</tr>`
+      )
+      .join('');
+    const html =
+      `<div style="font-family:Arial,Helvetica,sans-serif">` +
+      `<p style="margin:0 0 8px"><b>${escapeHtml(subjectText)}</b></p>` +
+      `<table style="border-collapse:collapse;margin:0 0 8px">${htmlRows}</table>` +
+      `<p style="margin:0">Created with World-Cal — <a href="${escapeHtml(url)}">${escapeHtml(url)}</a></p>` +
+      `</div>`;
+
+    await copyRich(html, plain);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
