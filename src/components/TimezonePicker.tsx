@@ -66,23 +66,33 @@ const TimezonePicker = memo(() => {
             {filtered.length === 0 ? (
               <div className="picker-empty">No matching timezones</div>
             ) : (
-              filtered.map((tz) => (
-                <button
-                  key={tz.tz}
-                  className="picker-item"
-                  onClick={() => {
-                    addSecondaryTz(tz.tz);
-                    setIsOpen(false);
-                    setSearch('');
-                  }}
-                >
-                  <span className="picker-text">
-                    <span className="picker-label">{tz.label}</span>
-                    {tz.country && <span className="picker-country">{tz.country}</span>}
-                  </span>
-                  <span className="picker-code">{getOffsetLabel(tz.tz)}</span>
-                </button>
-              ))
+              filtered.map((tz) => {
+                const q = search.trim().toLowerCase();
+                // If the match came from an alias (e.g. "San Francisco" → Los Angeles), show it.
+                const matchedAlias =
+                  q && !tz.label.toLowerCase().includes(q) && !tz.country.toLowerCase().includes(q)
+                    ? tz.aliases?.find((a) => a.toLowerCase().includes(q))
+                    : undefined;
+                const primary = matchedAlias ?? tz.label;
+                const secondary = matchedAlias ? `${tz.label}, ${tz.country}` : tz.country;
+                return (
+                  <button
+                    key={tz.tz}
+                    className="picker-item"
+                    onClick={() => {
+                      addSecondaryTz(tz.tz);
+                      setIsOpen(false);
+                      setSearch('');
+                    }}
+                  >
+                    <span className="picker-text">
+                      <span className="picker-label">{primary}</span>
+                      {secondary && <span className="picker-country">{secondary}</span>}
+                    </span>
+                    <span className="picker-code">{getOffsetLabel(tz.tz)}</span>
+                  </button>
+                );
+              })
             )}
           </div>
         </div>

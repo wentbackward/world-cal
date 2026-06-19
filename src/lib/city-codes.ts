@@ -90,6 +90,20 @@ export const CITY_CODE_MAP: Record<string, TimeZoneEntry> = {
   BUE: { tz: 'America/Argentina/Buenos_Aires', label: 'Buenos Aires', shortCode: 'BUE', country: 'Argentina' },
   LIM: { tz: 'America/Lima', label: 'Lima', shortCode: 'LIM', country: 'Peru' },
   ANC: { tz: 'America/Anchorage', label: 'Anchorage', shortCode: 'ANC', country: 'United States' },
+  SAN: { tz: 'America/Los_Angeles', label: 'San Diego', shortCode: 'SAN', country: 'United States' },
+  LAS: { tz: 'America/Los_Angeles', label: 'Las Vegas', shortCode: 'LAS', country: 'United States' },
+  SJC: { tz: 'America/Los_Angeles', label: 'San Jose', shortCode: 'SJC', country: 'United States' },
+  BOS: { tz: 'America/New_York', label: 'Boston', shortCode: 'BOS', country: 'United States' },
+  WAS: { tz: 'America/New_York', label: 'Washington DC', shortCode: 'WAS', country: 'United States' },
+  PHL: { tz: 'America/New_York', label: 'Philadelphia', shortCode: 'PHL', country: 'United States' },
+  AUS: { tz: 'America/Chicago', label: 'Austin', shortCode: 'AUS', country: 'United States' },
+  SLC: { tz: 'America/Denver', label: 'Salt Lake City', shortCode: 'SLC', country: 'United States' },
+  DEL: { tz: 'Asia/Kolkata', label: 'Delhi', shortCode: 'DEL', country: 'India' },
+  BLR: { tz: 'Asia/Kolkata', label: 'Bangalore', shortCode: 'BLR', country: 'India' },
+  GVA: { tz: 'Europe/Zurich', label: 'Geneva', shortCode: 'GVA', country: 'Switzerland' },
+  MUC: { tz: 'Europe/Berlin', label: 'Munich', shortCode: 'MUC', country: 'Germany' },
+  BCN: { tz: 'Europe/Madrid', label: 'Barcelona', shortCode: 'BCN', country: 'Spain' },
+  MIL: { tz: 'Europe/Rome', label: 'Milan', shortCode: 'MIL', country: 'Italy' },
 };
 
 /**
@@ -124,10 +138,25 @@ function isValidTimeZone(tz: string): boolean {
   }
 }
 
+// tz -> curated city names (San Francisco, Boston, Mumbai, ...) for zones the IANA
+// name doesn't surface, so they're findable in the picker.
+const CITY_ALIASES: Record<string, string[]> = (() => {
+  const map: Record<string, string[]> = {};
+  for (const entry of Object.values(CITY_CODE_MAP)) {
+    const list = (map[entry.tz] ??= []);
+    if (!list.includes(entry.label)) list.push(entry.label);
+  }
+  return map;
+})();
+
 /**
- * Get all available timezone entries for the picker — the full IANA list,
- * already sorted by country then city.
+ * Get all available timezone entries for the picker — the full IANA list (sorted by
+ * country then city), enriched with curated city names as searchable aliases.
  */
 export function getAllTimeZones(): TimeZoneEntry[] {
-  return ALL_TIMEZONES;
+  return ALL_TIMEZONES.map((entry) => {
+    const extra = (CITY_ALIASES[entry.tz] ?? []).filter((city) => city !== entry.label);
+    if (extra.length === 0) return entry;
+    return { ...entry, aliases: [...(entry.aliases ?? []), ...extra] };
+  });
 }

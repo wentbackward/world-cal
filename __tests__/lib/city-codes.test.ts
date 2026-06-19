@@ -18,6 +18,11 @@ describe('getAllTimeZones', () => {
     expect(all.every((e) => e.country.length > 0)).toBe(true);
   });
 
+  it('makes curated city names findable as aliases (e.g. San Francisco)', () => {
+    const la = all.find((e) => e.tz === 'America/Los_Angeles');
+    expect(la?.aliases).toContain('San Francisco');
+  });
+
   it('is sorted by country then city', () => {
     for (let i = 1; i < all.length; i++) {
       const prev = all[i - 1]!;
