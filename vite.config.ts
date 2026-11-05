@@ -2,7 +2,11 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
 export default defineConfig({
-  // Served from https://paulgresham.com/world-cal/ — assets resolve under this path.
-  base: '/world-cal/',
+  // Relative base so the same build works at any path:
+  //   paulgresham.com/world-cal/  AND  world-cal.paulgresham.com/
+  // Asset links are written as ./assets/… — browser resolves under the
+  // current page directory. Requires trailing-slash on the URL
+  // (Hostinger already redirects /world-cal → /world-cal/).
+  base: './',
   plugins: [react()],
 })
