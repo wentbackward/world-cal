@@ -1,0 +1,11 @@
+node_modules
+dist
+.git
+.github
+docs
+infra
+__tests__
+*.md
+.claude
+*.tsbuildinfo
+.DS_Store
