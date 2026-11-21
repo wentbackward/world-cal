@@ -1,0 +1,208 @@
+#!/usr/bin/env bash
+# Gate a batch of ready branches with ONE full run of the project's checks (a merge train).
+#
+# Usage: gate-train.sh <branch> [<branch> ...]          (branches in merge order)
+#
+# In the gate worktree, stacks each <remote>/<branch> on the latest <remote>/<base> in order, keeping each
+# branch's rebased head as train-<branch>. A branch already stacked on the previous one in the train replays
+# only its own commits (rebase --onto), so no branch ever carries foreign commits. Then it runs every check
+# of .devloop.json "checks" once on the top of the stack; heavy checks run through heavy.sh, so the
+# machine-wide slot limit and memory cap apply. The gate's own git work and every check run with
+# the dogfood policy-shim dirs SCRUBBED from PATH (entries whose git or gh is an interpreted
+# script, 2-byte `#!` magic — ticket #70, authority separation); the seam
+# MULTIPI_GATE_SCRUB_POLICY_SHIMS controls it (default 1 = scrub; 0 restores the armed PATH).
+# When the scenario store is on (dark-factory spec §5), the
+# scenario stage (scenario-stage.sh) then runs on the train top: a red stage is TRAIN RED (no record), the
+# stage's exit 2 propagates as the gate's exit 2, and a failed check prints `scenarios skipped` instead.
+# Every terminal path also records the LAST-GATE ARTIFACT <state>/gate-last.txt (one line:
+# `result=green|red ts=<ms> detail=<failing-checks|gate_setup|scenarios|-> logdir=<logs>`) — the
+# board's "last gate" source (ticket #103); additive, it carries no new exit-code contract.
+#
+# Exit: 0 TRAIN GREEN (recorded for merge-train.sh), 1 TRAIN RED (includes gate_setup failure),
+# 2 usage/config (includes a stage usage/config error), 3 rebase conflict (the output names the branch:
+# drop it from the train, rebase it after the others merge).
+set -u
+# Pure-bash bootstrap (no dirname, no pwd(1)): a PATH the scrub below empties entirely
+# carries no coreutils, and the named dl_die must still be reachable (ticket #67).
+# The cd runs in a SUBSHELL — the script's cwd must stay where the operator called it.
+case "${BASH_SOURCE[0]}" in
+  */*) _sd=${BASH_SOURCE[0]%/*} ;;
+  *) _sd=. ;;
+esac
+scripts_dir=$(cd -- "$_sd" && printf '%s' "$PWD")
+# shellcheck source=lib/common.sh
+. "$scripts_dir/lib/common.sh"
+
+[ $# -gt 0 ] || dl_die "usage: gate-train.sh <branch> [<branch> ...]"
+
+# --- policy-shim PATH scrub (ticket #70, authority separation) ----------------------
+# The dogfood policy shims protect the loop's SESSIONS; they must never veto the loop's
+# own verification. Rebuild PATH dropping every entry whose git or gh is an INTERPRETED
+# script (2-byte `#!` magic — dl_scrub_policy_shims, lib/common.sh) BEFORE any git work
+# of the gate (config load, worktree setup, stacking, checks, stage). Seam
+# MULTIPI_GATE_SCRUB_POLICY_SHIMS: default 1 (scrub); 0 restores the armed PATH for
+# tests that exercise the armed posture.
+if [ "${MULTIPI_GATE_SCRUB_POLICY_SHIMS:-1}" != 0 ]; then
+  PATH=$(dl_scrub_policy_shims "$PATH")
+  # Named error, not a downstream command-not-found cascade (review of #70 r1): the
+  # bootstrap and the scrub are pure shell, so this is reachable even with PATH gone.
+  [ -n "$PATH" ] || dl_die "policy-shim scrub emptied PATH (every entry carried an interpreted git or gh — nothing left to run)"
+  export PATH
+fi
+
+dl_load_config required
+[ "$(cfg_len checks)" -gt 0 ] || dl_die "no \"checks\" in $DL_CONFIG"
+
+gate=$(dl_ensure_gate_worktree) || exit 2
+logs=$(dl_logs_dir)
+mkdir -p "$logs" "$DL_STATE" || dl_die "cannot create $logs"
+train_file=$(dl_train_file)
+rm -f "$train_file"
+last_file="$DL_STATE/gate-last.txt"
+# gate_record RESULT DETAIL — write the last-gate artifact (ticket #103): the board reads it,
+# nothing else consumes it. tmp+rename so a concurrent read never sees a torn line.
+gate_record() {
+  local ts
+  ts=$(date +%s%3N)
+  printf 'result=%s ts=%s detail=%s logdir=%s\n' "$1" "$ts" "$2" "$logs" >"$last_file.tmp.$$" && mv "$last_file.tmp.$$" "$last_file"
+}
+cd "$gate" || exit 2
+
+git fetch -q --prune "$DL_REMOTE" || dl_die "git fetch $DL_REMOTE failed"
+git rebase --abort >/dev/null 2>&1
+git checkout -q --detach "$DL_REMOTE/$DL_BASE" || dl_die "cannot check out $DL_REMOTE/$DL_BASE"
+
+base_ref="$DL_REMOTE/$DL_BASE"
+previous=""
+records=""
+
+# upstream_of BRANCH: the commit after which the branch's own commits start.
+upstream_of() {
+  if [ -n "$previous" ] && git merge-base --is-ancestor "$DL_REMOTE/$previous" "$DL_REMOTE/$1"; then
+    git rev-parse "$DL_REMOTE/$previous"
+  else
+    git merge-base "$DL_REMOTE/$1" "$DL_REMOTE/$DL_BASE"
+  fi
+}
+
+for branch in "$@"; do
+  git rev-parse -q --verify "$DL_REMOTE/$branch^{commit}" >/dev/null ||
+    dl_die "$DL_REMOTE/$branch does not exist (push the branch first)"
+  source_head=$(git rev-parse "$DL_REMOTE/$branch")
+  git branch -q -f "train-$branch" "$source_head"
+  git checkout -q "train-$branch"
+  if ! git rebase -q --onto "$base_ref" "$(upstream_of "$branch")" >/dev/null 2>&1; then
+    git rebase --abort >/dev/null 2>&1
+    git checkout -q --detach "$DL_REMOTE/$DL_BASE"
+    gate_record red "rebase-conflict-at-$branch"
+    echo "TRAIN rebase conflict at $branch"
+    exit 3
+  fi
+  base_ref="train-$branch"
+  previous=$branch
+  records+="$branch $source_head $(git rev-parse HEAD) pending"$'\n'
+  echo "stacked $branch -> $(git rev-parse --short HEAD)"
+done
+
+setup=$(cfg gate_setup "")
+if [ -n "$setup" ]; then
+  if ! bash -c "$setup" >"$logs/train-setup.log" 2>&1; then
+    gate_record red gate_setup
+    echo "gate_setup failed (log: $logs/train-setup.log)"
+    echo "TRAIN RED"
+    exit 1
+  fi
+fi
+
+# check_field INDEX FIELD DEFAULT: a field of checks[INDEX]; a plain string entry is its own command.
+check_field() {
+  local entry
+  entry=$(cfg "checks.$1" "")
+  case "$entry" in
+    "{"*) cfg "checks.$1.$2" "$3" ;;
+    *) if [ "$2" = command ]; then printf '%s\n' "$entry"; else printf '%s\n' "$3"; fi ;;
+  esac
+}
+
+all_green=yes
+summary=""
+failures=""
+count=$(cfg_len checks)
+for ((i = 0; i < count; i++)); do
+  name=$(check_field "$i" name "check-$((i + 1))")
+  command=$(check_field "$i" command "")
+  heavy=$(check_field "$i" heavy true)
+  log="$logs/train-${name//[^A-Za-z0-9_.-]/_}.log"
+  if [ "$heavy" = false ]; then
+    bash -c "$command" >"$log" 2>&1
+  else
+    "$scripts_dir/heavy.sh" bash -c "$command" >"$log" 2>&1
+  fi
+  rc=$?
+  echo "$name rc=$rc (log: $log)"
+  [ "$rc" -eq 0 ] || { all_green=""; failures="${failures:+$failures,}$name"; }
+  pattern=$(check_field "$i" summary "")
+  if [ -n "$pattern" ]; then
+    summary+="$(grep -E -- "$pattern" "$log" | tail -n 3)"$'\n'
+  else
+    summary+="$(tail -n 2 "$log")"$'\n'
+  fi
+done
+printf '%s' "$summary" | sed '/^$/d'
+
+# --- scenario stage (dark-factory spec §5) ---------------------------------------
+# The on/off call uses the SAME pure module (config.ts: loadConfig + scenariosOn) the
+# stage and the doctor use, so all three agree: loadConfig resolves the config from the
+# MAIN worktree's .devloop.json, i.e. the same single main-root config the stage and the
+# doctor read — NOT whatever is checked out at the train top here. When the call cannot
+# be made (no node, no modules, an incomplete module candidate), the stage is skipped:
+# the gate degrades to its pre-stage behaviour and the doctor reports the defect — an
+# undeterminable store is not a green light for anything.
+scen_src=""
+for cand in "$DL_ROOT/.pi/extensions/multipi-devloop/src" "$scripts_dir/../extension/src"; do
+  # The same three modules the stage itself requires: an incomplete candidate must read
+  # as "the call cannot be made" (degrade), never as runnable.
+  if [ -f "$cand/config.ts" ] && [ -f "$cand/scenarios.ts" ] && [ -f "$cand/scenario-run.ts" ]; then
+    scen_src=$cand
+    break
+  fi
+done
+scen_on=off
+if [ -n "$scen_src" ] && command -v node >/dev/null 2>&1; then
+  detected=$(
+    SCEN_SRC=$scen_src node --input-type=module -e '
+const { loadConfig, scenariosOn } = await import(process.env.SCEN_SRC + "/config.ts");
+const cfg = loadConfig(process.cwd());
+process.stdout.write(cfg && scenariosOn(cfg) ? "on" : "off");
+' 2>/dev/null
+  )
+  [ "$detected" = "on" ] && scen_on=on
+fi
+if [ "$scen_on" = on ] && [ -n "$all_green" ]; then
+  # The stage runs on the train top and inherits the gate's stdout; its own lines land in
+  # train-scenarios.log. The stage never prints the TRAIN word — this gate owns it. A red
+  # stage is a red train WITHOUT the record; the stage's exit 2 (usage/config) propagates
+  # as the gate's exit 2, like the gate's own config errors.
+  "$scripts_dir/scenario-stage.sh"
+  scen_rc=$?
+  if [ "$scen_rc" -ne 0 ]; then
+    git checkout -q --detach "$DL_REMOTE/$DL_BASE"
+    [ "$scen_rc" -eq 2 ] && exit 2
+    gate_record red scenarios
+    echo "TRAIN RED"
+    exit 1
+  fi
+elif [ "$scen_on" = on ]; then
+  echo "scenarios skipped"
+fi
+
+git checkout -q --detach "$DL_REMOTE/$DL_BASE"
+if [ -n "$all_green" ]; then
+  printf '%s' "$records" >"$train_file"
+  gate_record green -
+  echo "TRAIN GREEN"
+  exit 0
+fi
+gate_record red "$failures"
+echo "TRAIN RED"
+exit 1

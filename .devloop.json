@@ -1,0 +1,35 @@
+{
+  "base_branch": "main",
+  "remote": "origin",
+  "fast_check": "npx tsc --noEmit",
+  "checks": [
+    {
+      "name": "tsc",
+      "command": "npx tsc --noEmit",
+      "heavy": false,
+      "summary": "tsc"
+    },
+    {
+      "name": "unit",
+      "command": "npm test -- --run",
+      "heavy": false,
+      "summary": "(\\d+) passed"
+    },
+    {
+      "name": "build",
+      "command": "npm run build",
+      "heavy": false,
+      "summary": "✓ built"
+    },
+    {
+      "name": "lint",
+      "command": "npx eslint src __tests__ scripts/gen-timezones.mjs",
+      "heavy": false,
+      "summary": "problems"
+    }
+  ],
+  "heavy": { "slots": 2 },
+  "stop_gate": { "require_clean_tree": true, "max_blocks": 5 },
+  "merge": { "method": "squash", "delete_branch": true },
+  "gate_setup": "[ -f package.json ] && npm ci --no-audit --no-fund"
+}

@@ -1,0 +1,280 @@
+# shellcheck shell=bash
+# Shared helpers for the multipi (dev-loop) scripts: repository paths and the project config
+# (.devloop.json). JSON is read with jq when it is installed, else with python3
+# (MULTIPI_NO_JQ=1 forces python3).
+
+dl_die() {
+  echo "multipi: $*" >&2
+  exit 2
+}
+
+dl_have_jq() {
+  [ -z "${MULTIPI_NO_JQ:-}" ] && command -v jq >/dev/null 2>&1
+}
+
+dl_warn() {
+  echo "multipi: $*" >&2
+}
+
+# json_get PATH < json  -> the value at a dotted path ("heavy.slots", "checks.0.name").
+# Strings print raw, other values as JSON, missing or null values print nothing.
+json_get() {
+  local path=$1
+  if dl_have_jq; then
+    jq -r --arg p "$path" '
+      ($p | if . == "" then [] else split(".") | map(tonumber? // .) end) as $k
+      | (try getpath($k) catch null)
+      | if . == null then empty elif type == "string" then . else tojson end' 2>/dev/null
+  else
+    python3 -I -c '
+import json, sys
+path = [p for p in sys.argv[1].split(".") if p]
+try:
+    value = json.load(sys.stdin)
+    for key in path:
+        if isinstance(value, list):
+            value = value[int(key)]
+        elif isinstance(value, dict):
+            value = value[key]
+        else:
+            raise KeyError(key)
+except (KeyError, IndexError, ValueError, TypeError):
+    sys.exit(0)
+if value is None:
+    sys.exit(0)
+print(value if isinstance(value, str) else json.dumps(value))
+' "$path" 2>/dev/null
+  fi
+}
+
+# json_len PATH < json  -> the length of the array at PATH (0 when missing or not an array).
+json_len() {
+  local value
+  value=$(json_get "$1")
+  if [ -z "$value" ]; then
+    echo 0
+  elif dl_have_jq; then
+    printf '%s' "$value" | jq -r 'if type == "array" then length else 0 end' 2>/dev/null || echo 0
+  else
+    printf '%s' "$value" | python3 -I -c '
+import json, sys
+value = json.load(sys.stdin)
+print(len(value) if isinstance(value, list) else 0)' 2>/dev/null || echo 0
+  fi
+}
+
+# dl_main_root: the root of the main worktree (where .devloop.json lives), from any worktree.
+dl_main_root() {
+  local common
+  common=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null) || return 1
+  if [ "$(basename "$common")" = ".git" ]; then
+    dirname "$common"
+  else
+    git rev-parse --show-toplevel 2>/dev/null
+  fi
+}
+
+# dl_load_config [required]: sets DL_ROOT, DL_CONFIG, DL_REPO, DL_STATE and the common settings.
+# With "required", a missing repository or config file is an error; otherwise defaults apply.
+dl_load_config() {
+  local required=${1:-}
+  DL_ROOT=$(dl_main_root) || DL_ROOT=""
+  if [ -z "$DL_ROOT" ] && [ "$required" = required ]; then
+    dl_die "not inside a git repository"
+  fi
+  DL_CONFIG=${MULTIPI_CONFIG:-${DL_ROOT:+$DL_ROOT/.devloop.json}}
+  if [ "$required" = required ] && [ ! -f "$DL_CONFIG" ]; then
+    dl_die "no config at ${DL_CONFIG:-.devloop.json}; run the devloop setup skill or copy templates/devloop.json"
+  fi
+  DL_REPO=$(basename "${DL_ROOT:-$PWD}")
+  DL_STATE=${MULTIPI_HOME:-$HOME/.multipi}/$DL_REPO
+  DL_REMOTE=$(cfg remote origin)
+  DL_BASE=$(cfg base_branch main)
+  # Fork-trap protection: a bare `gh` call in a fork can resolve to the UPSTREAM tracker
+  # by default (see AGENTS.md), so pin GH_REPO to the configured origin unless the caller
+  # already exported one (an explicit pin wins — the same preset rule as the factory
+  # toggle). Applies to every loop script (gate/merge/open-pr/doctor/heavy/cleanup).
+  # GitHub.com origins are pinned only — scp (git@github.com:), https/http and ssh://
+  # forms, with optional port and .git suffix; any other host stays unpinned.
+  # This block ships with the plugin (install.sh copies scripts/lib/), so a local
+  # per-repo patch of it is redundant — the pin travels with the next upgrade.
+  if [ -z "${GH_REPO:-}" ]; then
+    local origin_url
+    origin_url=$(git -C "${DL_ROOT:-.}" remote get-url "$DL_REMOTE" 2>/dev/null || true)
+    GH_REPO=$(printf '%s\n' "$origin_url" | sed -nE \
+      -e 's#^(https?|ssh)://git@github\.com(:[0-9]+)?/([^/]+/[^/]+)$#\3#p' \
+      -e 's#^(https?|ssh)://github\.com(:[0-9]+)?/([^/]+/[^/]+)$#\3#p' \
+      -e 's#^git@github\.com:([^/]+/[^/]+)$#\1#p' | sed 's#\.git$##')
+  fi
+  [ -n "${GH_REPO:-}" ] && export GH_REPO
+  # Return 0 unconditionally: as the function's last command, the conditional above
+  # would make dl_load_config fail whenever GH_REPO is empty, breaking every "&&" caller.
+  return 0
+}
+
+# cfg PATH [DEFAULT]: a value from the project config, or DEFAULT.
+cfg() {
+  local value=""
+  if [ -n "${DL_CONFIG:-}" ] && [ -f "$DL_CONFIG" ]; then
+    value=$(json_get "$1" <"$DL_CONFIG")
+  fi
+  if [ -n "$value" ]; then printf '%s\n' "$value"; else printf '%s\n' "${2:-}"; fi
+}
+
+# cfg_len PATH: the length of an array in the project config.
+cfg_len() {
+  if [ -n "${DL_CONFIG:-}" ] && [ -f "$DL_CONFIG" ]; then json_len "$1" <"$DL_CONFIG"; else echo 0; fi
+}
+
+# dl_resolve PATH: an absolute path; relative paths resolve against the main worktree root.
+dl_resolve() {
+  case "$1" in
+    /*) printf '%s\n' "$1" ;;
+    "~"/*) printf '%s\n' "$HOME/${1#"~/"}" ;;
+    *) printf '%s\n' "${DL_ROOT:-$PWD}/$1" ;;
+  esac
+}
+
+# dl_canonical PATH: an absolute path without . or .. components (unchanged if realpath is missing).
+dl_canonical() {
+  realpath -m -q -- "$1" 2>/dev/null || printf '%s\n' "$1"
+}
+
+# dl_scrub_policy_shims PATH -> the same PATH minus every entry whose git or gh is an
+# INTERPRETED script (2-byte `#!` magic on the resolved file) — the dogfood policy-shim
+# directories (ticket #70, authority separation: the shims protect the loop's sessions
+# and must never veto the loop's own verification). Compiled binaries (whose first two
+# bytes are not `#!`) are kept; unresolvable and empty entries pass through untouched.
+# The caller owns the seam MULTIPI_GATE_SCRUB_POLICY_SHIMS (default 1; 0 = armed PATH).
+# Pure shell end to end (the `#!` probe is a bash read, not head(1)): a PATH the scrub
+# empties entirely must still reach gate-train's named dl_die, and an empty PATH carries
+# no coreutils (ticket #67, review of #70 r1).
+dl_scrub_policy_shims() {
+  local entry real bin drop out="" magic
+  local -a parts
+  local IFS=':'
+  read -r -a parts <<<"$1"
+  for entry in ${parts[@]+"${parts[@]}"}; do
+    [ -n "$entry" ] || continue
+    real=$(cd "$entry" 2>/dev/null && pwd -P) || real=""
+    if [ -n "$real" ]; then
+      drop=0
+      for bin in git gh; do
+        if [ -f "$real/$bin" ]; then
+          magic=""
+          IFS= read -r -n 2 magic <"$real/$bin" 2>/dev/null || true
+          [ "$magic" = "#!" ] && { drop=1; break; }
+        fi
+      done
+      [ "$drop" = 1 ] && continue
+    fi
+    out+="${out:+:}$entry"
+  done
+  printf '%s\n' "$out"
+  return 0
+}
+
+dl_notes_dir() {
+  local configured
+  configured=$(cfg notes_dir "")
+  if [ -n "$configured" ]; then dl_canonical "$(dl_resolve "$configured")"; else dl_canonical "$DL_STATE/notes"; fi
+}
+
+dl_logs_dir() {
+  local configured
+  configured=$(cfg logs_dir "")
+  if [ -n "$configured" ]; then dl_canonical "$(dl_resolve "$configured")"; else dl_canonical "$DL_STATE/logs"; fi
+}
+
+dl_worktree_dir() {
+  # Single directory holding ALL issue worktrees of this project (plus the gate worktree).
+  # worktree_dir: absolute, ~/, or relative to the repo's PARENT dir (never the repo itself —
+  # a worktree cannot live inside the repository it belongs to). Mirrors worktreeDir in config.ts.
+  local wd
+  wd=$(cfg worktree_dir "")
+  if [ -z "$wd" ]; then
+    dl_canonical "$DL_STATE/worktrees/$DL_REPO"
+  elif [ "${wd#/}" != "$wd" ] || [ "${wd#"~"/}" != "$wd" ]; then
+    dl_canonical "$(dl_resolve "$wd")"
+  else
+    dl_canonical "$(dl_resolve "../$wd")"
+  fi
+}
+
+dl_scenarios_dir() {
+  # Scenario store dir (dark-factory spec §2). scenarios.dir: absolute, ~/, or relative to
+  # the repo's PARENT dir (same rule as worktree_dir — the store can never live inside the
+  # repo). Default: <state>/scenarios, a sibling of the consolidated worktrees dir. Mirrors
+  # scenariosDir in config.ts. An explicit "scenarios": false still yields the default path
+  # (the store is off; the path is where it would live).
+  local sd
+  sd=$(cfg scenarios.dir "")
+  if [ -z "$sd" ]; then
+    dl_canonical "$DL_STATE/scenarios"
+  elif [ "${sd#/}" != "$sd" ] || [ "${sd#"~"/}" != "$sd" ]; then
+    dl_canonical "$(dl_resolve "$sd")"
+  else
+    dl_canonical "$(dl_resolve "../$sd")"
+  fi
+}
+
+dl_gate_dir() {
+  local configured
+  configured=$(cfg gate_worktree "")
+  if [ -n "$configured" ]; then
+    dl_canonical "$(dl_resolve "$configured")"
+  else
+    # Default: <worktree dir>/gate — the same default config.ts computes, so scripts and
+    # extension agree on one location.
+    dl_canonical "$(dl_worktree_dir)/gate"
+  fi
+}
+
+# dl_note_file BRANCH: the PR notes file of a branch (slashes become underscores).
+dl_note_file() {
+  printf '%s/pr-%s.md\n' "$(dl_notes_dir)" "${1//\//_}"
+}
+
+# dl_blocked_question TEXT -> the blocking-question line of an implementer's BLOCKED
+# report: the first non-empty line of the "## Questions" section, else the
+# "STATUS: BLOCKED — reason" line, else the first line ending in "?", else
+# '(no question found in issue)'. Shared by the operator surfaces (multipi-board.sh's
+# "└─ Q:" line, multipi-watch.sh's blocked-nudge, ticket #104) — one implementation,
+# no drift.
+dl_blocked_question() {
+  local q
+  q=$(printf '%s\n' "$1" | awk '
+    /^## Questions[[:space:]]*$/ {f = 1; next}
+    f {sub(/^[[:space:]]+/, ""); if (length($0) > 0) {print; exit}}')
+  [ -n "$q" ] && { printf '%s' "$q"; return 0; }
+  q=$(printf '%s\n' "$1" | grep -m1 -E '^STATUS:[[:space:]]*BLOCKED' || true)
+  if [ -n "$q" ]; then
+    printf '%s\n' "$q" \
+      | sed -E 's/^STATUS:[[:space:]]*BLOCKED[[:space:]]*[-—–][[:space:]]*//' \
+      | sed -E 's/^STATUS:[[:space:]]*BLOCKED[[:space:]]*//'
+    return 0
+  fi
+  q=$(printf '%s\n' "$1" | grep -m1 -E '\?[[:space:]]*$' || true)
+  [ -n "$q" ] && { printf '%s' "$q"; return 0; }
+  printf '(no question found in issue)'
+}
+
+# dl_train_file: where gate-train.sh records the last green train (branch, source head, gated head).
+dl_train_file() {
+  printf '%s/train-green.txt\n' "$DL_STATE"
+}
+
+# dl_ensure_gate_worktree: create the gate worktree (detached at the base) if it does not exist yet.
+dl_ensure_gate_worktree() {
+  local gate
+  gate=$(dl_gate_dir)
+  if [ -d "$gate" ]; then
+    git -C "$gate" rev-parse --git-dir >/dev/null 2>&1 || dl_die "$gate exists but is not a git worktree"
+    [ "$(cd "$gate" && dl_main_root)" = "$DL_ROOT" ] || dl_die "$gate is a worktree of another repository"
+  else
+    git -C "$DL_ROOT" fetch -q "$DL_REMOTE" || dl_die "git fetch $DL_REMOTE failed"
+    git -C "$DL_ROOT" worktree add -q --detach "$gate" "$DL_REMOTE/$DL_BASE" >/dev/null ||
+      dl_die "could not create the gate worktree at $gate"
+  fi
+  printf '%s\n' "$gate"
+}
