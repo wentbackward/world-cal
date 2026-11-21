@@ -1,4 +1,13 @@
-import { readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, it, expect } from 'vitest';
 
 const workflow = readFileSync('.github/workflows/deploy.yml', 'utf8');
@@ -18,6 +27,50 @@ function jobBlock(name: string): string {
     (line, i) => i > 0 && (/^ {2}[A-Za-z0-9_-]+:/.test(line) || /^[A-Za-z_]/.test(line)),
   );
   return end === -1 || end === 0 ? rest.join('\n') : rest.slice(0, end).join('\n');
+}
+
+/** Extract the `run: |` bash body of the version-check job (10-space indent). */
+function versionCheckBash(): string {
+  const jobStart = workflow.indexOf('  version-check:');
+  const rest = workflow.slice(jobStart);
+  const lines = rest.split('\n');
+  const runLine = lines.findIndex((line) => /^\s*run: \|$/.test(line));
+  const body: string[] = [];
+  for (const line of lines.slice(runLine + 1)) {
+    if (line.trim() === '') {
+      body.push('');
+      continue;
+    }
+    const match = line.match(/^ {10}(.*)$/);
+    if (!match || match[1] === undefined) break;
+    body.push(match[1]);
+  }
+  const script = body.join('\n').replace(/\n+$/, '');
+  if (!script) throw new Error('could not extract version-check bash script');
+  return script;
+}
+
+/** Run the extracted script with a fake tag + temp GITHUB_OUTPUT. */
+function runVersionGate(tag: string): { code: number; output: string } {
+  const dir = mkdtempSync(join(tmpdir(), 'version-gate-'));
+  try {
+    const script = join(dir, 'gate.sh');
+    const out = join(dir, 'github_output');
+    writeFileSync(script, versionCheckBash() + '\n', 'utf8');
+    let code = 0;
+    try {
+      execFileSync('bash', [script], {
+        cwd: process.cwd(), // repo root — script reads ./package.json
+        env: { ...process.env, GITHUB_REF_NAME: tag, GITHUB_OUTPUT: out },
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+    } catch (error) {
+      code = (error as { status?: number }).status ?? 1;
+    }
+    return { code, output: existsSync(out) ? readFileSync(out, 'utf8') : '' };
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 }
 
 const onBlock = workflow.slice(0, workflow.indexOf('jobs:'));
@@ -93,6 +146,34 @@ describe('deploy workflow — version gate', () => {
     expect(semver.test('v0.1.0-rc.1')).toBe(false);
     expect(semver.test('v1.2.3-rc')).toBe(false);
     expect(semver.test('v1.2.3+build')).toBe(false);
+  });
+});
+
+describe('deploy workflow — version gate (script-level)', () => {
+  const stableTag = `v${packageJson.version}`;
+
+  it('exits 0 and reports ok=true for a stable tag matching package.json', () => {
+    const { code, output } = runVersionGate(stableTag);
+    expect(code).toBe(0);
+    expect(output).toContain('ok=true');
+  });
+
+  it('exits non-zero and reports no ok=true for a stable tag that disagrees with package.json', () => {
+    const { code, output } = runVersionGate('v9.9.9');
+    expect(code).not.toBe(0);
+    expect(output).not.toContain('ok=true');
+  });
+
+  it('exits 0 and reports ok=false for a candidate tag', () => {
+    const { code, output } = runVersionGate(`v${packageJson.version}-rc.1`);
+    expect(code).toBe(0);
+    expect(output).toContain('ok=false');
+  });
+
+  it('exits 0 and reports ok=false for a malformed tag', () => {
+    const { code, output } = runVersionGate('not-a-tag');
+    expect(code).toBe(0);
+    expect(output).toContain('ok=false');
   });
 });
 
