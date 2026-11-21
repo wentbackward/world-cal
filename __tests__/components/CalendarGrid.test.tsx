@@ -7,7 +7,7 @@
  * per test. Default layout: horizontal, primary Europe/London, secondary
  * Asia/Hong_Kong, no selection.
  */
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
 import { useEffect } from 'react';
 import { render, fireEvent, act } from '@testing-library/react';
 import { AppStateProvider, useAppState } from '../../src/hooks/useAppState';
@@ -24,6 +24,13 @@ const COL_WIDTH = GRID_WIDTH / GRID_COLS; // 10px
 const ROW_HEIGHT = GRID_HEIGHT / GRID_ROWS; // 10px
 
 let latestSelection: TimeRange | null = null;
+
+// Freeze the clock at mid-day so expected selections built from `new Date()`
+// below match the instants the grid derives — no run straddling midnight flakes.
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(new Date(2026, 0, 15, 12, 0, 0));
+});
 
 function SelectionProbe() {
   const { state } = useAppState();
@@ -117,6 +124,7 @@ function expectSelection(actual: TimeRange | null, expected: TimeRange) {
 }
 
 afterEach(() => {
+  vi.useRealTimers();
   latestSelection = null;
   delete (window as unknown as Record<string, unknown>).matchMedia;
   window.history.replaceState({}, '', '/');
@@ -136,6 +144,46 @@ describe('pointer-event drag selection', () => {
     } finally {
       delete (Element.prototype as unknown as Record<string, unknown>).setPointerCapture;
     }
+  });
+
+  it('starts a drag for a touch pointer on the primary button', () => {
+    const { container } = renderGrid();
+    const grid = container.querySelector('.tz-cells') as HTMLElement;
+
+    fireEvent.pointerDown(grid, { clientX: COL_WIDTH * 1.5, clientY: ROW_HEIGHT * 0.5, pointerId: 1, button: 0, pointerType: 'touch' });
+    expect(getOverlay(container)).not.toBeNull();
+  });
+
+  it('starts a drag for a pen pointer on the primary button', () => {
+    const { container } = renderGrid();
+    const grid = container.querySelector('.tz-cells') as HTMLElement;
+
+    fireEvent.pointerDown(grid, { clientX: COL_WIDTH * 1.5, clientY: ROW_HEIGHT * 0.5, pointerId: 1, button: 0, pointerType: 'pen' });
+    expect(getOverlay(container)).not.toBeNull();
+  });
+
+  it('does not start a drag when a mouse side button is pressed', () => {
+    const { container } = renderGrid();
+    const grid = container.querySelector('.tz-cells') as HTMLElement;
+
+    fireEvent.pointerDown(grid, { clientX: COL_WIDTH * 1.5, clientY: ROW_HEIGHT * 0.5, pointerId: 1, button: 2, pointerType: 'mouse' });
+    expect(getOverlay(container)).toBeNull();
+
+    fireEvent.pointerMove(grid, { clientX: COL_WIDTH * 13.5, clientY: ROW_HEIGHT * 1.5, pointerId: 1, pointerType: 'mouse' });
+    fireEvent.pointerUp(grid, { clientX: COL_WIDTH * 13.5, clientY: ROW_HEIGHT * 1.5, pointerId: 1, button: 0, pointerType: 'mouse' });
+    expect(latestSelection).toBeNull();
+  });
+
+  it('does not start a drag when a pen side button is pressed', () => {
+    const { container } = renderGrid();
+    const grid = container.querySelector('.tz-cells') as HTMLElement;
+
+    fireEvent.pointerDown(grid, { clientX: COL_WIDTH * 1.5, clientY: ROW_HEIGHT * 0.5, pointerId: 1, button: 2, pointerType: 'pen' });
+    expect(getOverlay(container)).toBeNull();
+
+    fireEvent.pointerMove(grid, { clientX: COL_WIDTH * 13.5, clientY: ROW_HEIGHT * 1.5, pointerId: 1, pointerType: 'pen' });
+    fireEvent.pointerUp(grid, { clientX: COL_WIDTH * 13.5, clientY: ROW_HEIGHT * 1.5, pointerId: 1, button: 0, pointerType: 'pen' });
+    expect(latestSelection).toBeNull();
   });
 
   it('drags across cells and reports the selected hour window', () => {
@@ -203,23 +251,25 @@ describe('pointer-event drag selection', () => {
     expect(container.querySelectorAll('.tz-cell--selected').length).toBe(2);
   });
 
-  it('activates the same selection as a click on Space and Enter', () => {
+  it('activates the same selection as a click on Space and Enter on the same cell', () => {
     const { container } = renderGrid();
-    const cells = getCells(container);
+    const cell = getCells(container)[5]!;
+    const expected = selectionForHourWindow(5);
 
-    fireEvent.click(cells[5]!);
+    fireEvent.click(cell);
     const clickSelection = latestSelection;
-    expect(clickSelection).not.toBeNull();
-    expectSelection(clickSelection, selectionForHourWindow(5));
+    expectSelection(clickSelection, expected);
 
-    const cell = cells[8]!;
     act(() => cell.focus());
     fireEvent.keyDown(cell, { key: 'Enter' });
-    expectSelection(latestSelection, selectionForHourWindow(8));
-    expect(latestSelection?.start.getTime()).not.toBe(clickSelection?.start.getTime());
+    expectSelection(latestSelection, expected);
+    expect(latestSelection?.start.getTime()).toBe(clickSelection?.start.getTime());
+    expect(latestSelection?.end.getTime()).toBe(clickSelection?.end.getTime());
 
     fireEvent.keyDown(cell, { key: ' ' });
-    expectSelection(latestSelection, selectionForHourWindow(8));
+    expectSelection(latestSelection, expected);
+    expect(latestSelection?.start.getTime()).toBe(clickSelection?.start.getTime());
+    expect(latestSelection?.end.getTime()).toBe(clickSelection?.end.getTime());
   });
 
   it('does not change the selection on hover or focus of a non-dragging cell', () => {
