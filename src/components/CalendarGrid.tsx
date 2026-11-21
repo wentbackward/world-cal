@@ -101,11 +101,12 @@ export default function CalendarGrid() {
     const weekday = instant.toLocaleDateString('en-US', { timeZone: tz, weekday: 'short' });
     const rolled = localDateKey(instant, tz) !== primaryDayKey;
 
-    // A click/Enter that follows a just-cancelled drag (no-capture path: pointer
+    // A click that follows a just-cancelled drag (no-capture path: pointer
     // capture unavailable, e.g. jsdom/older browsers) must not resurrect the
-    // cancelled drag as a single-hour selection.
+    // cancelled drag as a single-hour selection — the click path consumes the
+    // justCanceled suppression flag. Keyboard activation is unconditional:
+    // spec requires Enter/Space on a focused cell to behave exactly like a click.
     const selectHour = () => {
-      if (consumeJustCanceled()) return;
       setSelection({ start: instant, end: instantAt(hour + 1) });
     };
 
@@ -116,7 +117,10 @@ export default function CalendarGrid() {
         role="button"
         tabIndex={0}
         aria-label={`${getShortTzLabel(tz)} ${weekday} ${formatTime(instant, tz)}`}
-        onClick={selectHour}
+        onClick={() => {
+          if (consumeJustCanceled()) return;
+          selectHour();
+        }}
         onKeyDown={(e) => {
           if (e.key !== 'Enter' && e.key !== ' ') return;
           e.preventDefault();

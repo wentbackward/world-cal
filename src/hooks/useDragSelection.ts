@@ -44,11 +44,13 @@ export function useDragSelection(
   // The pointer that started the current drag; every event from any other pointer
   // is ignored so a second finger tap mid-drag cannot steal the drag.
   const activePointerIdRef = useRef<number | null>(null);
-  // Set by cancel() when a drag is aborted via Escape. The cell's click /
-  // keyboard activation fires after the pointerup of the same gesture (in
-  // browsers where setPointerCapture is unavailable — jsdom, older browsers);
-  // it must be suppressed so the cancelled drag does not resurrect as a
-  // single-hour selection. Consumed by the consumer's activation handler.
+  // Set by cancel() when a drag is aborted via Escape. In browsers where
+  // setPointerCapture is unavailable (jsdom, older browsers) the browser-native
+  // click of the cancelled gesture still fires on the cell after pointerup; that
+  // click must be suppressed so the cancelled drag does not resurrect as a
+  // single-hour selection. Consumed by the click path only — explicit keyboard
+  // activation (Enter/Space) is never suppressed. Cleared at the next pointerdown
+  // so a later, unrelated gesture is never suppressed.
   const justCanceledRef = useRef(false);
 
   const setDragState = useCallback((next: SelectionState) => {
@@ -105,7 +107,7 @@ export function useDragSelection(
     setDragState(CLEARED);
   }, [setDragState]);
 
-  /** Returns true (once) if a drag was just cancelled; the cell's activation must be suppressed. */
+  /** Returns true (once) if a drag was just cancelled; the click path must suppress the activation. */
   const consumeJustCanceled = useCallback(() => {
     const pending = justCanceledRef.current;
     justCanceledRef.current = false;
