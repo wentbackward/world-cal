@@ -24,6 +24,10 @@ const GRID_HEIGHT = 20;
 const COL_WIDTH = GRID_WIDTH / GRID_COLS; // 10px
 const ROW_HEIGHT = GRID_HEIGHT / GRID_ROWS; // 10px
 
+// Vertical layout: 2 timezone columns x 24 hour rows, 10px per cell.
+const V_WIDTH = 20;
+const V_HEIGHT = 240;
+
 let latestSelection: TimeRange | null = null;
 
 // Freeze the clock at mid-day so expected selections built from `new Date()`
@@ -107,6 +111,36 @@ function renderGrid({ matches = false }: { matches?: boolean } = {}) {
   const grid = utils.container.querySelector('.tz-cells');
   if (!grid) throw new Error('expected the horizontal .tz-cells grid element');
   stubGridRect(grid);
+  return utils;
+}
+
+function stubVerticalRect(el: Element) {
+  el.getBoundingClientRect = () =>
+    ({
+      left: 0,
+      top: 0,
+      right: V_WIDTH,
+      bottom: V_HEIGHT,
+      width: V_WIDTH,
+      height: V_HEIGHT,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    }) as DOMRect;
+}
+
+function renderVerticalGrid() {
+  stubMatchMedia(true);
+  window.history.replaceState({}, '', '?tz=LON,HKG');
+  const utils = render(
+    <AppStateProvider>
+      <SelectionProbe />
+      <CalendarGrid />
+    </AppStateProvider>
+  );
+  const grid = utils.container.querySelector('.v-cells');
+  if (!grid) throw new Error('expected the vertical .v-cells grid element');
+  stubVerticalRect(grid);
   return utils;
 }
 
@@ -440,5 +474,75 @@ describe('pointer-event drag selection', () => {
     act(() => cell.focus());
 
     expectSelection(latestSelection, clickSelection as TimeRange);
+  });
+
+  it('does not commit the cell activation after a cancelled drag (no-capture path)', () => {
+    const { container } = renderGrid();
+    const grid = container.querySelector('.tz-cells') as HTMLElement;
+
+    fireEvent.pointerDown(grid, { clientX: COL_WIDTH * 5.5, clientY: ROW_HEIGHT * 0.5, pointerId: 1, button: 0 });
+    fireEvent.keyDown(document.body, { key: 'Escape' });
+    expect(getOverlay(container)).toBeNull();
+    expect(latestSelection).toBeNull();
+
+    // The browser-native click the browser fires on the cell after pointerup.
+    fireEvent.pointerUp(grid, { clientX: COL_WIDTH * 5.5, clientY: ROW_HEIGHT * 0.5, pointerId: 1, button: 0 });
+    fireEvent.click(getCells(container)[5]!);
+
+    expect(latestSelection).toBeNull();
+    expect(container.querySelectorAll('.tz-cell--selected').length).toBe(0);
+  });
+
+  it('does not commit a keyboard activation of a cell right after a cancelled drag', () => {
+    const { container } = renderGrid();
+    const grid = container.querySelector('.tz-cells') as HTMLElement;
+
+    fireEvent.pointerDown(grid, { clientX: COL_WIDTH * 5.5, clientY: ROW_HEIGHT * 0.5, pointerId: 1, button: 0 });
+    fireEvent.keyDown(document.body, { key: 'Escape' });
+    expect(getOverlay(container)).toBeNull();
+
+    fireEvent.keyDown(getCells(container)[5]!, { key: 'Enter' });
+
+    expect(latestSelection).toBeNull();
+    expect(container.querySelectorAll('.tz-cell--selected').length).toBe(0);
+  });
+
+  it('does not clear the committed selection on Escape aimed at the date input', () => {
+    const { container } = renderApp();
+
+    fireEvent.click(getCells(container)[5]!);
+    expect(container.querySelector('.selection-panel')).not.toBeNull();
+
+    const dateInput = container.querySelector('.date-input') as HTMLInputElement;
+    act(() => dateInput.focus());
+    fireEvent.keyDown(dateInput, { key: 'Escape' });
+
+    expect(container.querySelector('.selection-panel')).not.toBeNull();
+    expect(container.querySelectorAll('.tz-cell--selected').length).toBe(2);
+  });
+
+  it('maps rows to hours in the vertical (narrow) layout', () => {
+    const { container } = renderVerticalGrid();
+    const grid = container.querySelector('.v-cells') as HTMLElement;
+
+    fireEvent.pointerDown(grid, { clientX: 5, clientY: 25, pointerId: 1, button: 0 });
+    expect(getOverlay(container)).not.toBeNull();
+
+    fireEvent.pointerMove(grid, { clientX: 15, clientY: 125, pointerId: 1 });
+    fireEvent.pointerUp(grid, { clientX: 15, clientY: 125, pointerId: 1, button: 0 });
+
+    expect(getOverlay(container)).toBeNull();
+    expectSelection(latestSelection, selectionForRange(2, 12));
+    expect(container.querySelectorAll('.tz-cell--selected').length).toBe(11 * 2); // hours 2..12 x 2 timezone columns
+  });
+
+  it('selects the 23 -> 24 hour window (next day 00:00) for the last hour cell', () => {
+    const { container } = renderGrid();
+    const cell = getCells(container)[23]!;
+
+    act(() => cell.focus());
+    fireEvent.keyDown(cell, { key: 'Enter' });
+
+    expectSelection(latestSelection, selectionForHourWindow(23));
   });
 });
