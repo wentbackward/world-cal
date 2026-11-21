@@ -493,18 +493,30 @@ describe('pointer-event drag selection', () => {
     expect(container.querySelectorAll('.tz-cell--selected').length).toBe(0);
   });
 
-  it('does not commit a keyboard activation of a cell right after a cancelled drag', () => {
+  it('commits the keyboard activation of a cell right after a cancelled drag (click path stays suppressed)', () => {
     const { container } = renderGrid();
     const grid = container.querySelector('.tz-cells') as HTMLElement;
 
     fireEvent.pointerDown(grid, { clientX: COL_WIDTH * 5.5, clientY: ROW_HEIGHT * 0.5, pointerId: 1, button: 0 });
     fireEvent.keyDown(document.body, { key: 'Escape' });
     expect(getOverlay(container)).toBeNull();
-
-    fireEvent.keyDown(getCells(container)[5]!, { key: 'Enter' });
-
     expect(latestSelection).toBeNull();
-    expect(container.querySelectorAll('.tz-cell--selected').length).toBe(0);
+
+    // An explicit keyboard activation is unconditional — no intervening pointerdown,
+    // so it must not be surprised by the post-cancel suppression flag.
+    const cell = getCells(container)[5]!;
+    act(() => cell.focus());
+    fireEvent.keyDown(cell, { key: 'Enter' });
+    expectSelection(latestSelection, selectionForHourWindow(5));
+
+    fireEvent.keyDown(cell, { key: ' ' });
+    expectSelection(latestSelection, selectionForHourWindow(5));
+
+    // The browser-native click the browser fires on the cancelled gesture's cell is
+    // still suppressed — it must not replace the keyboard-committed selection.
+    fireEvent.pointerUp(grid, { clientX: COL_WIDTH * 5.5, clientY: ROW_HEIGHT * 0.5, pointerId: 1, button: 0 });
+    fireEvent.click(getCells(container)[8]!);
+    expectSelection(latestSelection, selectionForHourWindow(5));
   });
 
   it('does not clear the committed selection on Escape aimed at the date input', () => {
