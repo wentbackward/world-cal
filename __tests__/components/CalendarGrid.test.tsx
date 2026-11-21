@@ -337,6 +337,61 @@ describe('pointer-event drag selection', () => {
     expect(latestSelection).toBeNull();
   });
 
+  it('does not cancel the drag on Escape targeted at the date input', () => {
+    const { container } = renderGrid();
+    const grid = container.querySelector('.tz-cells') as HTMLElement;
+    const dateInput = container.querySelector('.date-input') as HTMLInputElement;
+
+    fireEvent.pointerDown(grid, { clientX: COL_WIDTH * 1.5, clientY: ROW_HEIGHT * 0.5, pointerId: 1, button: 0 });
+    fireEvent.pointerMove(grid, { clientX: COL_WIDTH * 3.5, clientY: ROW_HEIGHT * 0.5, pointerId: 1 });
+    expect(getOverlay(container)).not.toBeNull();
+
+    fireEvent.keyDown(dateInput, { key: 'Escape' });
+
+    expect(getOverlay(container)).not.toBeNull();
+    expect(latestSelection).toBeNull();
+  });
+
+  it('does not cancel the drag on Escape targeted at a textarea', () => {
+    const { container } = renderGrid();
+    const grid = container.querySelector('.tz-cells') as HTMLElement;
+    const textarea = document.createElement('textarea');
+    container.appendChild(textarea);
+
+    fireEvent.pointerDown(grid, { clientX: COL_WIDTH * 1.5, clientY: ROW_HEIGHT * 0.5, pointerId: 1, button: 0 });
+    expect(getOverlay(container)).not.toBeNull();
+
+    fireEvent.keyDown(textarea, { key: 'Escape' });
+
+    expect(getOverlay(container)).not.toBeNull();
+    expect(latestSelection).toBeNull();
+  });
+
+  it('does not cancel the drag on an Escape already defaultPrevented by an earlier listener', () => {
+    const { container } = renderGrid();
+    const grid = container.querySelector('.tz-cells') as HTMLElement;
+
+    fireEvent.pointerDown(grid, { clientX: COL_WIDTH * 1.5, clientY: ROW_HEIGHT * 0.5, pointerId: 1, button: 0 });
+    expect(getOverlay(container)).not.toBeNull();
+
+    // Capture-phase window listener runs before the hook's bubble listener and
+    // marks the event as already handled.
+    const guard = (e: Event) => e.preventDefault();
+    window.addEventListener('keydown', guard, true);
+    try {
+      fireEvent.keyDown(document.body, { key: 'Escape' });
+      expect(getOverlay(container)).not.toBeNull();
+      expect(latestSelection).toBeNull();
+    } finally {
+      window.removeEventListener('keydown', guard, true);
+    }
+
+    // An unhandled Escape still cancels the drag afterwards.
+    fireEvent.keyDown(document.body, { key: 'Escape' });
+    expect(getOverlay(container)).toBeNull();
+    expect(latestSelection).toBeNull();
+  });
+
   it('selects the hour window of a focused cell on Enter', () => {
     const { container } = renderGrid();
     const cell = getCells(container)[8]!;
