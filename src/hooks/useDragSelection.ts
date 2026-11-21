@@ -156,24 +156,28 @@ export function useDragSelection(
   useEffect(() => {
     if (!state.isDragging) return;
 
-    const handleWindowUp = (e: PointerEvent) => {
-      if (activePointerIdRef.current === null || e.pointerId !== activePointerIdRef.current) return;
-      commit();
-    };
-    const handleWindowCancel = (e: PointerEvent) => {
+    // One release handler covers both pointerup and pointercancel: any outside-grid
+    // release from the initiating pointer commits the drag and clears the overlay.
+    const handleWindowRelease = (e: PointerEvent) => {
       if (activePointerIdRef.current === null || e.pointerId !== activePointerIdRef.current) return;
       commit();
     };
     const handleWindowKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') cancel();
+      if (e.key !== 'Escape') return;
+      // Leave an already-handled Escape and an Escape aimed at an input/textarea
+      // (the user is typing, not dragging) alone.
+      if (e.defaultPrevented) return;
+      const tag = (e.target as HTMLElement | null)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+      cancel();
     };
 
-    window.addEventListener('pointerup', handleWindowUp);
-    window.addEventListener('pointercancel', handleWindowCancel);
+    window.addEventListener('pointerup', handleWindowRelease);
+    window.addEventListener('pointercancel', handleWindowRelease);
     window.addEventListener('keydown', handleWindowKeyDown);
     return () => {
-      window.removeEventListener('pointerup', handleWindowUp);
-      window.removeEventListener('pointercancel', handleWindowCancel);
+      window.removeEventListener('pointerup', handleWindowRelease);
+      window.removeEventListener('pointercancel', handleWindowRelease);
       window.removeEventListener('keydown', handleWindowKeyDown);
     };
   }, [state.isDragging, commit, cancel]);
