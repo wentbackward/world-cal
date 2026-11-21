@@ -118,6 +118,11 @@ describe('deploy workflow — version gate', () => {
     expect(versionCheckJob).toContain("startsWith(github.ref, 'refs/tags/')");
   });
 
+  it('pins Node 20 via setup-node (the gate does not rely on the runner pre-installed node)', () => {
+    expect(versionCheckJob).toContain('actions/setup-node@v4');
+    expect(versionCheckJob).toContain('node-version: 20');
+  });
+
   it('rejects mismatched tags with a non-zero exit', () => {
     expect(versionCheckJob).toContain('exit 1');
   });
@@ -152,6 +157,12 @@ describe('deploy workflow — version gate', () => {
 describe('deploy workflow — version gate (script-level)', () => {
   const stableTag = `v${packageJson.version}`;
 
+  // A well-formed semver tag that disagrees with package.json's version —
+  // derived, never hard-coded, so it stays valid as the version moves.
+  const match = /^(\d+)\.(\d+)\.(\d+)$/.exec(packageJson.version);
+  if (!match) throw new Error(`package.json version '${packageJson.version}' is not semver`);
+  const mismatchTag = `v${match[1]}.${match[2]}.${Number(match[3]) + 1}`;
+
   it('exits 0 and reports ok=true for a stable tag matching package.json', () => {
     const { code, output } = runVersionGate(stableTag);
     expect(code).toBe(0);
@@ -159,7 +170,7 @@ describe('deploy workflow — version gate (script-level)', () => {
   });
 
   it('exits non-zero and reports no ok=true for a stable tag that disagrees with package.json', () => {
-    const { code, output } = runVersionGate('v9.9.9');
+    const { code, output } = runVersionGate(mismatchTag);
     expect(code).not.toBe(0);
     expect(output).not.toContain('ok=true');
   });
@@ -168,12 +179,14 @@ describe('deploy workflow — version gate (script-level)', () => {
     const { code, output } = runVersionGate(`v${packageJson.version}-rc.1`);
     expect(code).toBe(0);
     expect(output).toContain('ok=false');
+    expect(output).not.toContain('ok=true');
   });
 
   it('exits 0 and reports ok=false for a malformed tag', () => {
     const { code, output } = runVersionGate('not-a-tag');
     expect(code).toBe(0);
     expect(output).toContain('ok=false');
+    expect(output).not.toContain('ok=true');
   });
 });
 
