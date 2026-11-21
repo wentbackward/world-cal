@@ -41,6 +41,9 @@ export function useDragSelection(
   // Mirrored synchronously so window-level handlers (registered while dragging)
   // always see the latest drag state even before the render commits.
   const stateRef = useRef<SelectionState>(state);
+  // The pointer that started the current drag; every event from any other pointer
+  // is ignored so a second finger tap mid-drag cannot steal the drag.
+  const activePointerIdRef = useRef<number | null>(null);
 
   const setDragState = useCallback((next: SelectionState) => {
     stateRef.current = next;
@@ -77,6 +80,7 @@ export function useDragSelection(
   const commit = useCallback(() => {
     const d = stateRef.current;
     if (!d.isDragging || !d.startCell || !d.endCell) return;
+    activePointerIdRef.current = null;
     const { startCell, endCell } = d;
     setDragState(CLEARED);
     onSelection({
@@ -90,6 +94,7 @@ export function useDragSelection(
   /** Cancel the in-progress drag: overlay cleared, no selection committed. */
   const cancel = useCallback(() => {
     if (!stateRef.current.isDragging) return;
+    activePointerIdRef.current = null;
     setDragState(CLEARED);
   }, [setDragState]);
 
@@ -99,9 +104,14 @@ export function useDragSelection(
       // touch pointers always start a drag.
       if (e.pointerType !== 'touch' && e.button !== 0) return;
 
+      // A drag is already in progress: ignore any other pointer (including
+      // one flagged isPrimary) so it cannot steal or reset the drag.
+      if (activePointerIdRef.current !== null) return;
+
       const cell = getCell(e);
       if (!isValidCell(cell)) return;
 
+      activePointerIdRef.current = e.pointerId;
       setDragState({ isDragging: true, startCell: cell, endCell: cell });
 
       // Capture the pointer so the grid keeps receiving events while the
@@ -117,6 +127,7 @@ export function useDragSelection(
 
   const handlePointerMove = useCallback(
     (e: React.PointerEvent<HTMLElement>) => {
+      if (activePointerIdRef.current === null || e.pointerId !== activePointerIdRef.current) return;
       const d = stateRef.current;
       if (!d.isDragging || !d.startCell || !d.endCell) return;
       setDragState({ ...d, endCell: clampCell(getCell(e)) });
@@ -124,21 +135,35 @@ export function useDragSelection(
     [clampCell, getCell, setDragState]
   );
 
-  const handlePointerUp = useCallback(() => {
-    commit();
-  }, [commit]);
+  const handlePointerUp = useCallback(
+    (e: React.PointerEvent<HTMLElement>) => {
+      if (activePointerIdRef.current === null || e.pointerId !== activePointerIdRef.current) return;
+      commit();
+    },
+    [commit]
+  );
 
-  const handlePointerCancel = useCallback(() => {
-    commit();
-  }, [commit]);
+  const handlePointerCancel = useCallback(
+    (e: React.PointerEvent<HTMLElement>) => {
+      if (activePointerIdRef.current === null || e.pointerId !== activePointerIdRef.current) return;
+      commit();
+    },
+    [commit]
+  );
 
   // Release/Escape handling for the whole window while dragging, so a release
   // outside the grid still completes the selection and always clears the overlay.
   useEffect(() => {
     if (!state.isDragging) return;
 
-    const handleWindowUp = () => commit();
-    const handleWindowCancel = () => commit();
+    const handleWindowUp = (e: PointerEvent) => {
+      if (activePointerIdRef.current === null || e.pointerId !== activePointerIdRef.current) return;
+      commit();
+    };
+    const handleWindowCancel = (e: PointerEvent) => {
+      if (activePointerIdRef.current === null || e.pointerId !== activePointerIdRef.current) return;
+      commit();
+    };
     const handleWindowKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') cancel();
     };
