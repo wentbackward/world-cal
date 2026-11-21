@@ -548,6 +548,59 @@ describe('pointer-event drag selection', () => {
     expect(container.querySelectorAll('.tz-cell--selected').length).toBe(11 * 2); // hours 2..12 x 2 timezone columns
   });
 
+  it('ignores cell activation while a drag is in progress; the drag still commits on release', () => {
+    const { container } = renderGrid();
+    const grid = container.querySelector('.tz-cells') as HTMLElement;
+
+    // Start a drag at hour 5 and move it to hour 8.
+    fireEvent.pointerDown(grid, { clientX: COL_WIDTH * 5.5, clientY: ROW_HEIGHT * 0.5, pointerId: 1, button: 0 });
+    fireEvent.pointerMove(grid, { clientX: COL_WIDTH * 8.5, clientY: ROW_HEIGHT * 0.5, pointerId: 1 });
+    expect(getOverlay(container)).not.toBeNull();
+
+    // Enter on a focused cell mid-drag must not set a selection — the drag owns release.
+    const cell = getCells(container)[8]!;
+    act(() => cell.focus());
+    fireEvent.keyDown(cell, { key: 'Enter' });
+    expect(latestSelection).toBeNull();
+    expect(container.querySelectorAll('.tz-cell--selected').length).toBe(0);
+
+    // The drag's release commits the drag's own range, not the cell's hour window.
+    fireEvent.pointerUp(grid, { clientX: COL_WIDTH * 8.5, clientY: ROW_HEIGHT * 0.5, pointerId: 1, button: 0 });
+    expect(getOverlay(container)).toBeNull();
+    expectSelection(latestSelection, selectionForRange(5, 8));
+  });
+
+  it('selects the hour window of a focused cell on Enter in the vertical (narrow) layout', () => {
+    const { container } = renderVerticalGrid();
+    // Vertical layout: hour-major, tz-minor — index = hour * 2 + tzIndex.
+    const cell = getCells(container)[8 * 2]!;
+
+    act(() => cell.focus());
+    fireEvent.keyDown(cell, { key: 'Enter' });
+
+    expectSelection(latestSelection, selectionForHourWindow(8));
+    expect(container.querySelectorAll('.tz-cell--selected').length).toBe(2); // hour 8 x 2 timezone columns
+  });
+
+  it('does not clear the committed selection on a defaultPrevented Escape (app-level handler)', () => {
+    const { container } = renderApp();
+
+    fireEvent.click(getCells(container)[5]!);
+    expect(container.querySelector('.selection-panel')).not.toBeNull();
+
+    // Capture-phase window listener marks the Escape as handled before the app sees it.
+    const guard = (e: Event) => e.preventDefault();
+    window.addEventListener('keydown', guard, true);
+    try {
+      fireEvent.keyDown(document.body, { key: 'Escape' });
+    } finally {
+      window.removeEventListener('keydown', guard, true);
+    }
+
+    expect(container.querySelector('.selection-panel')).not.toBeNull();
+    expect(container.querySelectorAll('.tz-cell--selected').length).toBe(2);
+  });
+
   it('selects the 23 -> 24 hour window (next day 00:00) for the last hour cell', () => {
     const { container } = renderGrid();
     const cell = getCells(container)[23]!;
