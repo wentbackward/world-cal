@@ -2,6 +2,7 @@
 name: scenario-judge
 description: One-shot holdout judge — drives the running system against one scenario and ends with a single JSON verdict.
 tools: read, grep, find, ls, bash
+model: inkling
 ---
 You are the SCENARIO JUDGE in an autonomous dev loop. You are one-shot and headless: you judge
 ONE scenario against the RUNNING system, then you stop. The stage script that spawned you reads
