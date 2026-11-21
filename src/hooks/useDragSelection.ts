@@ -33,7 +33,7 @@ function clamp(value: number, min: number, max: number): number {
 }
 
 export function useDragSelection(
-  onSelection: (cells: CellRange | null) => void,
+  onSelection: (cells: CellRange) => void,
   gridSize: { cols: number; rows: number }
 ) {
   const { cols, rows } = gridSize;
@@ -44,6 +44,12 @@ export function useDragSelection(
   // The pointer that started the current drag; every event from any other pointer
   // is ignored so a second finger tap mid-drag cannot steal the drag.
   const activePointerIdRef = useRef<number | null>(null);
+  // Set by cancel() when a drag is aborted via Escape. The cell's click /
+  // keyboard activation fires after the pointerup of the same gesture (in
+  // browsers where setPointerCapture is unavailable — jsdom, older browsers);
+  // it must be suppressed so the cancelled drag does not resurrect as a
+  // single-hour selection. Consumed by the consumer's activation handler.
+  const justCanceledRef = useRef(false);
 
   const setDragState = useCallback((next: SelectionState) => {
     stateRef.current = next;
@@ -95,11 +101,23 @@ export function useDragSelection(
   const cancel = useCallback(() => {
     if (!stateRef.current.isDragging) return;
     activePointerIdRef.current = null;
+    justCanceledRef.current = true;
     setDragState(CLEARED);
   }, [setDragState]);
 
+  /** Returns true (once) if a drag was just cancelled; the cell's activation must be suppressed. */
+  const consumeJustCanceled = useCallback(() => {
+    const pending = justCanceledRef.current;
+    justCanceledRef.current = false;
+    return pending;
+  }, []);
+
   const handlePointerDown = useCallback(
     (e: React.PointerEvent<HTMLElement>) => {
+      // A pointerdown starts a new gesture: any post-cancel suppression from a
+      // previous gesture is stale and must not leak into it.
+      justCanceledRef.current = false;
+
       // Primary button only for non-touch pointers (mouse, pen, other);
       // touch pointers always start a drag.
       if (e.pointerType !== 'touch' && e.button !== 0) return;
@@ -211,5 +229,6 @@ export function useDragSelection(
     handlers,
     overlayStyle,
     isDragging: state.isDragging,
+    consumeJustCanceled,
   };
 }
