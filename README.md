@@ -41,8 +41,9 @@ The app builds to a static `dist/` directory and runs as a small container.
   produces the static bundle, then a minimal Caddy image copies `dist/`
   and serves it on port 80.
 - **GHCR** — the `Deploy World-Cal` workflow builds the image and publishes
-  it to GHCR (`ghcr.io/<owner>/world-cal`) with `latest` and the commit-SHA
-  tags.
+  it to GHCR with `latest` and the commit-SHA tags. The image name is
+  `world_cal` (underscore), not `world-cal` — the repo and the image differ,
+  so the published image is `ghcr.io/<owner>/world_cal`.
 - **CI/CD pipeline** — `.github/workflows/deploy.yml` is the release
   pipeline:
   - *Main push, pull request, or candidate tag* (does not match
