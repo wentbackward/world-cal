@@ -12,7 +12,8 @@ A follow-up review of the current codebase flagged a small number of real defect
 
 - No new features (e.g., multi-day grids, theme switching UI).
 - No UI redesign. Styles, layouts, and copy stay as-is.
-- No changes to the URL encoding, export format, or CI/CD pipeline.
+- No changes to the URL encoding or export format.
+- No CI/CD pipeline changes beyond the version-gate in §5 (the trigger behavior is changed; nothing else about the pipeline moves).
 
 ## Requirements
 
@@ -61,6 +62,39 @@ Delete, in one pass:
 - `buildUrlQuery`: precompute a reverse lookup map (tz → short code) instead of scanning `CITY_CODE_MAP` per tz.
 - `getAllTimeZones()`: memoize the picker list per render (`useMemo`).
 - Decide explicitly on `setViewDate` clearing the selection and document the decision (keep behavior; add a comment). No behavior change.
+
+
+### 5. Gate the CI pipeline on version roll-forward — not candidates
+
+**Problem.** The `Deploy World-Cal` workflow triggers on every push to `main`, so a candidate or
+accidental push ships the full pipeline (unit tests → Docker build → GHCR publish → VPS deploy).
+Only a version that rolls forward — a release — should reach production.
+
+**Versioning nomenclature.** The devloop tooling defines no versioning scheme, so this spec adopts
+stock [semver](https://semver.org):
+
+- Stable release: `v<major>.<minor>.<patch>` — e.g. `v0.2.0` (no suffix, no build metadata).
+- Candidate / pre-release: `v<major>.<minor>.<patch>-<pre>` — e.g. `v0.2.0-rc1`, `v0.2.0-beta.2`.
+
+**Spec.**
+
+- The full pipeline (unit tests → Docker build + GHCR publish → SSH deploy to the VPS) triggers only
+  on a tag push matching `^v[0-9]+\.[0-9]+\.[0-9]+$` — a stable roll-forward. The tag must match the
+  `package.json` `version` field (check in the workflow; refuse to proceed on mismatch).
+- A candidate tag push (suffix after the `-`, e.g. `v0.2.0-rc1`, `v0.2.0-beta.2`) must NOT trigger
+  the full pipeline. It runs the lightweight unit-test gate only — no build, no publish, no deploy.
+- Pushes to `main` and PRs (neither version tags) run the lightweight unit-test gate only. No
+  build, no publish, no deploy.
+- `workflow_dispatch` remains available as an operator escape hatch for the full pipeline,
+  documented as such (manual, explicit — never the default path).
+- `tsc`/unit-test/lint remain the light gate in all cases; the build + publish + deploy chain is
+  gated strictly on the stable-version tag.
+
+**Verification.**
+
+- Pushing `v0.2.0-rc1` runs the test gate and nothing else.
+- Pushing `v0.2.0` (or `workflow_dispatch`) runs the full pipeline.
+- A stable-version tag whose `package.json` disagrees with the tag is refused (no publish/deploy).
 
 ## Verification
 
