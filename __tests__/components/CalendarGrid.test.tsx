@@ -10,6 +10,7 @@
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
 import { useEffect } from 'react';
 import { render, fireEvent, act } from '@testing-library/react';
+import App from '../../src/App';
 import { AppStateProvider, useAppState } from '../../src/hooks/useAppState';
 import CalendarGrid from '../../src/components/CalendarGrid';
 import { createDateAtTime } from '../../src/utils/timezone';
@@ -103,6 +104,16 @@ function renderGrid({ matches = false }: { matches?: boolean } = {}) {
       <CalendarGrid />
     </AppStateProvider>
   );
+  const grid = utils.container.querySelector('.tz-cells');
+  if (!grid) throw new Error('expected the horizontal .tz-cells grid element');
+  stubGridRect(grid);
+  return utils;
+}
+
+function renderApp({ matches = false }: { matches?: boolean } = {}) {
+  stubMatchMedia(matches);
+  window.history.replaceState({}, '', '?tz=LON,HKG');
+  const utils = render(<App />);
   const grid = utils.container.querySelector('.tz-cells');
   if (!grid) throw new Error('expected the horizontal .tz-cells grid element');
   stubGridRect(grid);
@@ -225,6 +236,92 @@ describe('pointer-event drag selection', () => {
 
     expect(getOverlay(container)).toBeNull();
     expectSelection(latestSelection, selectionForRange(1, 13));
+  });
+
+  it('commits the drag on an in-grid pointercancel (same as pointerup)', () => {
+    const { container } = renderGrid();
+    const grid = container.querySelector('.tz-cells') as HTMLElement;
+
+    fireEvent.pointerDown(grid, { clientX: COL_WIDTH * 1.5, clientY: ROW_HEIGHT * 0.5, pointerId: 1, button: 0 });
+    fireEvent.pointerMove(grid, { clientX: COL_WIDTH * 13.5, clientY: ROW_HEIGHT * 0.5, pointerId: 1 });
+    fireEvent.pointerCancel(grid, { clientX: COL_WIDTH * 13.5, clientY: ROW_HEIGHT * 0.5, pointerId: 1 });
+
+    expect(getOverlay(container)).toBeNull();
+    expectSelection(latestSelection, selectionForRange(1, 13));
+  });
+
+  it('ignores a second pointer down mid-drag; only the initiating pointer commits', () => {
+    const { container } = renderGrid();
+    const grid = container.querySelector('.tz-cells') as HTMLElement;
+
+    // Finger A starts a drag at hour 1 and drags to hour 3.
+    fireEvent.pointerDown(grid, { clientX: COL_WIDTH * 1.5, clientY: ROW_HEIGHT * 0.5, pointerId: 1, button: 0 });
+    fireEvent.pointerMove(grid, { clientX: COL_WIDTH * 3.5, clientY: ROW_HEIGHT * 0.5, pointerId: 1 });
+
+    // Finger B taps at hour 10 mid-drag — must not steal or reset the drag.
+    fireEvent.pointerDown(grid, { clientX: COL_WIDTH * 10.5, clientY: ROW_HEIGHT * 0.5, pointerId: 2, button: 0 });
+    fireEvent.pointerMove(grid, { clientX: COL_WIDTH * 10.5, clientY: ROW_HEIGHT * 0.5, pointerId: 2 });
+    fireEvent.pointerUp(grid, { clientX: COL_WIDTH * 10.5, clientY: ROW_HEIGHT * 0.5, pointerId: 2, button: 0 });
+
+    // Finger A's drag is untouched: overlay still shows the hour 1–3 region.
+    expect(getOverlay(container)).not.toBeNull();
+    expect(latestSelection).toBeNull();
+
+    // Finger A's release commits the hour 1–3 selection, not finger B's hour-10 tap.
+    fireEvent.pointerUp(grid, { clientX: COL_WIDTH * 3.5, clientY: ROW_HEIGHT * 0.5, pointerId: 1, button: 0 });
+
+    expect(getOverlay(container)).toBeNull();
+    expectSelection(latestSelection, selectionForRange(1, 3));
+  });
+
+  it('ignores window release events whose pointerId is not the active drag pointer', () => {
+    const { container } = renderGrid();
+    const grid = container.querySelector('.tz-cells') as HTMLElement;
+
+    fireEvent.pointerDown(grid, { clientX: COL_WIDTH * 1.5, clientY: ROW_HEIGHT * 0.5, pointerId: 1, button: 0 });
+    fireEvent.pointerMove(grid, { clientX: COL_WIDTH * 3.5, clientY: ROW_HEIGHT * 0.5, pointerId: 1 });
+
+    // Non-initiating pointer releases on the window — must neither commit nor clear the overlay.
+    fireEvent.pointerUp(document.body, { clientX: 400, clientY: 300, pointerId: 2, button: 0 });
+    fireEvent.pointerCancel(document.body, { clientX: 400, clientY: 300, pointerId: 2 });
+
+    expect(getOverlay(container)).not.toBeNull();
+    expect(latestSelection).toBeNull();
+
+    // The initiating pointer's release still completes the selection.
+    fireEvent.pointerUp(document.body, { clientX: 400, clientY: 300, pointerId: 1, button: 0 });
+
+    expect(getOverlay(container)).toBeNull();
+    expectSelection(latestSelection, selectionForRange(1, 3));
+  });
+
+  it('cancels the in-progress drag on Escape; the app-level handler clears the committed selection', () => {
+    // Render the real app so the app-level Escape handler (window keydown) is mounted.
+    const { container } = renderApp();
+    const grid = container.querySelector('.tz-cells') as HTMLElement;
+
+    // Commit a selection first (click the hour-5 cell).
+    fireEvent.click(getCells(container)[5]!);
+    expect(container.querySelector('.selection-panel')).not.toBeNull();
+    expect(container.querySelectorAll('.tz-cell--selected').length).toBe(2);
+
+    // Start a new drag (hour 1 → hour 3).
+    fireEvent.pointerDown(grid, { clientX: COL_WIDTH * 1.5, clientY: ROW_HEIGHT * 0.5, pointerId: 1, button: 0 });
+    fireEvent.pointerMove(grid, { clientX: COL_WIDTH * 3.5, clientY: ROW_HEIGHT * 0.5, pointerId: 1 });
+    expect(getOverlay(container)).not.toBeNull();
+
+    fireEvent.keyDown(document.body, { key: 'Escape' });
+
+    // Overlay cleared and the drag discarded (no new commit): no selection-panel,
+    // no selected cells — the app-level handler cleared the committed selection, unchanged.
+    expect(getOverlay(container)).toBeNull();
+    expect(container.querySelector('.selection-panel')).toBeNull();
+    expect(container.querySelectorAll('.tz-cell--selected').length).toBe(0);
+
+    // The abandoned drag must not commit on its later release.
+    fireEvent.pointerUp(grid, { clientX: COL_WIDTH * 3.5, clientY: ROW_HEIGHT * 0.5, pointerId: 1, button: 0 });
+    expect(container.querySelector('.selection-panel')).toBeNull();
+    expect(container.querySelectorAll('.tz-cell--selected').length).toBe(0);
   });
 
   it('cancels the in-progress drag and clears the overlay on Escape without committing', () => {
