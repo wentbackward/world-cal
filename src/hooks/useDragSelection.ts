@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
+import { shouldIgnoreEscape } from '../utils/escape';
 
 interface CellPosition {
   row: number;
@@ -186,9 +187,7 @@ export function useDragSelection(
       if (e.key !== 'Escape') return;
       // Leave an already-handled Escape and an Escape aimed at an input/textarea
       // (the user is typing, not dragging) alone.
-      if (e.defaultPrevented) return;
-      const tag = (e.target as HTMLElement | null)?.tagName;
-      if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+      if (shouldIgnoreEscape(e)) return;
       cancel();
     };
 

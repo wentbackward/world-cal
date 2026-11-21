@@ -105,7 +105,9 @@ export default function CalendarGrid() {
     // capture unavailable, e.g. jsdom/older browsers) must not resurrect the
     // cancelled drag as a single-hour selection — the click path consumes the
     // justCanceled suppression flag. Keyboard activation is unconditional:
-    // spec requires Enter/Space on a focused cell to behave exactly like a click.
+    // spec requires Enter/Space on a focused cell to behave exactly like a click
+    // — except while a drag is in progress, where the drag owns release and the
+    // activation is ignored (see onKeyDown).
     const selectHour = () => {
       setSelection({ start: instant, end: instantAt(hour + 1) });
     };
@@ -122,6 +124,9 @@ export default function CalendarGrid() {
           selectHour();
         }}
         onKeyDown={(e) => {
+          // Mid-drag: the drag owns release and its commit overwrites whatever a
+          // cell activation would set, so activation is ignored entirely.
+          if (isDragging) return;
           if (e.key !== 'Enter' && e.key !== ' ') return;
           e.preventDefault();
           selectHour();
