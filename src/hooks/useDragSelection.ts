@@ -95,8 +95,9 @@ export function useDragSelection(
 
   const handlePointerDown = useCallback(
     (e: React.PointerEvent<HTMLElement>) => {
-      // Primary button only for mouse/pen; touch pointers always start a drag.
-      if (e.pointerType === 'mouse' && e.button !== 0) return;
+      // Primary button only for non-touch pointers (mouse, pen, other);
+      // touch pointers always start a drag.
+      if (e.pointerType !== 'touch' && e.button !== 0) return;
 
       const cell = getCell(e);
       if (!isValidCell(cell)) return;
