@@ -105,6 +105,8 @@ export default function CalendarGrid() {
     const weekday = instant.toLocaleDateString('en-US', { timeZone: tz, weekday: 'short' });
     const rolled = localDateKey(instant, tz) !== primaryDayKey;
 
+    const selectHour = () => setSelection({ start: instant, end: instantAt(hour + 1) });
+
     return (
       <div
         key={`${tz}-${hour}`}
@@ -112,7 +114,12 @@ export default function CalendarGrid() {
         role="button"
         tabIndex={0}
         aria-label={`${getShortTzLabel(tz)} ${weekday} ${formatTime(instant, tz)}`}
-        onClick={() => setSelection({ start: instant, end: instantAt(hour + 1) })}
+        onClick={selectHour}
+        onKeyDown={(e) => {
+          if (e.key !== 'Enter' && e.key !== ' ') return;
+          e.preventDefault();
+          selectHour();
+        }}
       >
         <span className="cell-time">{formatTime(instant, tz)}</span>
         <span className={`cell-day ${rolled ? 'cell-day--rolled' : ''}`}>{weekday}</span>

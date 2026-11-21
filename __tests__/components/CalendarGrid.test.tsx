@@ -118,7 +118,7 @@ function expectSelection(actual: TimeRange | null, expected: TimeRange) {
 
 afterEach(() => {
   latestSelection = null;
-  delete (window as Record<string, unknown>).matchMedia;
+  delete (window as unknown as Record<string, unknown>).matchMedia;
   window.history.replaceState({}, '', '/');
 });
 
@@ -134,7 +134,7 @@ describe('pointer-event drag selection', () => {
       fireEvent.pointerDown(grid, { clientX: COL_WIDTH * 1.5, clientY: ROW_HEIGHT * 0.5, pointerId: 77, button: 0 });
       expect(calls).toEqual([77]);
     } finally {
-      delete (Element.prototype as Record<string, unknown>).setPointerCapture;
+      delete (Element.prototype as unknown as Record<string, unknown>).setPointerCapture;
     }
   });
 
