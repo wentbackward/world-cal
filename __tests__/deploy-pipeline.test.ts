@@ -15,7 +15,7 @@ function jobBlock(name: string): string {
   if (start === -1) return '';
   const rest = lines.slice(start);
   const end = rest.findIndex(
-    (line, i) => i > 0 && (/^  [A-Za-z0-9_-]+:/.test(line) || /^[A-Za-z_]/.test(line)),
+    (line, i) => i > 0 && (/^ {2}[A-Za-z0-9_-]+:/.test(line) || /^[A-Za-z_]/.test(line)),
   );
   return end === -1 || end === 0 ? rest.join('\n') : rest.slice(0, end).join('\n');
 }
