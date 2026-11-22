@@ -3,7 +3,7 @@ import { useAppState } from '../hooks/useAppState';
 import { useDragSelection } from '../hooks/useDragSelection';
 import type { CellRange } from '../hooks/useDragSelection';
 import { useMediaQuery } from '../hooks/useMediaQuery';
-import { createDateAtTime, formatTime, getShortTzLabel, getOffsetLabel } from '../utils/timezone';
+import { createDateAtTime, formatTime, getShortTzLabel, getOffsetLabel, getLocalHour } from '../utils/timezone';
 import { getShading } from '../utils/shading';
 
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
@@ -92,8 +92,7 @@ export default function CalendarGrid() {
   // One data cell: that timezone's local time at the given hour's instant.
   const renderCell = (tz: string, hour: number) => {
     const instant = instants[hour]!;
-    const localHour =
-      Number(instant.toLocaleString('en-US', { timeZone: tz, hour: 'numeric', hour12: false })) % 24;
+    const localHour = getLocalHour(instant, tz);
     const shading = getShading(localHour, state.coreHours, state.extHours);
     const isSelected = state.selection
       ? instant >= state.selection.start && instant < state.selection.end
