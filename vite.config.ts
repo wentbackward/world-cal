@@ -1,5 +1,30 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import { execSync } from 'node:child_process'
+import pkg from './package.json'
+
+// Release info injected at build time — the footer shows the version as
+// tagged, the release date of the most recent tag, and a link back to the
+// repo. The version is package.json's single source of truth; the date is
+// the most recent git tag's commit date (what the app is released as),
+// read from git at build time. Untagged or git-less builds yield null —
+// the footer omits the date rather than guessing one.
+function releaseDate(): string | null {
+  try {
+    const tag = execSync('git describe --tags --abbrev=0', {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim()
+    if (!tag) return null
+    const date = execSync(`git log -1 --format=%cs ${tag}`, {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim()
+    return date || null
+  } catch {
+    return null
+  }
+}
 
 export default defineConfig({
   // Relative base so the same build works at any path — the
@@ -9,4 +34,8 @@ export default defineConfig({
   // required.
   base: './',
   plugins: [react()],
+  define: {
+    __APP_VERSION__: JSON.stringify(pkg.version),
+    __RELEASE_DATE__: JSON.stringify(releaseDate()),
+  },
 })

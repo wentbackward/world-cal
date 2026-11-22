@@ -5,6 +5,7 @@ import { shouldIgnoreEscape } from './utils/escape';
 import Header from './components/Header';
 import CalendarGrid from './components/CalendarGrid';
 import SelectionPanel from './components/SelectionPanel';
+import ReleaseFooter from './components/ReleaseFooter';
 import './App.css';
 
 function AppContent() {
@@ -32,6 +33,7 @@ function AppContent() {
         <CalendarGrid />
         <SelectionPanel />
       </main>
+      <ReleaseFooter />
     </div>
   );
 }
