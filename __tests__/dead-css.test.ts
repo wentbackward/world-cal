@@ -113,26 +113,28 @@ function sourceFiles(): string[] {
  *  1. className="a b …" (plain static string);
  *  2. className={` … ${…} … `} (template literal — static chunks, the quoted
  *     strings inside the template (e.g. the ternary `'tz-cell--selected'`), and
- *     the closed set of dynamic-suffix classes (`prefix--${…}` expanded against
+ *     the closed set of dynamic-suffix classes (`tz-cell--${…}` expanded against
  *     the real values — see below);
  *  3. className={… ? 'a' : 'b'} (JSX expression with a ternary class list — no
  *     backticks inside, so the quoted-string regex stays inside one expression);
  * plus single/double-quoted `.class-name` strings in tests (querySelector /
  * querySelectorAll).
  *
- * The dynamic-suffix families in this codebase (e.g. `tz-cell--${shading}`) are
- * pinned to the closed set of values, never to a bare `X--` prefix: a bare
- * prefix would treat any `X--*` class as rendered. The suffix values are parsed
- * at runtime from the ShadingClass union in src/types/index.ts so the pin cannot
- * drift. Bare `X--` tokens (the static chunk of `prefix--${…}`) are dropped in
- * add(), so an unrendered `X--*` rule can never match the set.
+ * The one dynamic-suffix family in this codebase (`tz-cell--${shading}`) is
+ * pinned to the closed set of values parsed from the ShadingClass union in
+ * src/types/index.ts — never to a bare `X--` prefix (a bare prefix would treat
+ * any `X--*` class as rendered) and never to a sibling family: a future
+ * `prefix--${…}` template (e.g. `btn--${…}`) must not inherit the tz-cell closed
+ * set, so the expansion is pinned to the `tz-cell` family and nothing else.
+ * Bare `tz-cell--` tokens (the static chunk of `tz-cell--${…}`) are dropped in
+ * add(), so an unrendered `tz-cell--*` rule can never match the set.
  */
 function collectTokens(text: string): { tokens: Set<string> } {
   const tokens = new Set<string>();
   const add = (raw: string) => {
     for (const tok of raw.split(/\s+/)) {
       const t = tok.replace(/^\.+/, '');
-      // A bare `prefix--` token (the static chunk of `tz-cell--${…}`) is dropped:
+      // A bare `tz-cell--` token (the static chunk of `tz-cell--${…}`) is dropped:
       // only the closed-set expansions are rendered.
       if (/^[a-z][a-z0-9-]*$/.test(t) && !t.endsWith('--')) tokens.add(t);
     }
@@ -144,11 +146,12 @@ function collectTokens(text: string): { tokens: Set<string> } {
   for (const m of text.matchAll(/className=\{`([^`]*)`\}/g)) {
     add(m[1]!.replace(/\$\{[^}]*\}/g, ' '));
     addInner(m[1]!);
-    // Closed set: expand each `prefix--${…}` dynamic suffix against the real values
-    // (parsed from the ShadingClass union). A bare `prefix--` token is dropped in
-    // add() above, so only the closed-set classes and quoted strings are rendered.
-    for (const mm of m[1]!.matchAll(/([a-z][a-z0-9-]*)--\$\{[A-Za-z_$][\w$]*\}/g)) {
-      for (const v of SHADING_CLASS_VALUES) tokens.add(`${mm[1]}--${v}`);
+    // Closed set, pinned to the tz-cell family: expand `tz-cell--${…}` against the
+    // real values (parsed from the ShadingClass union). Any other `prefix--${…}`
+    // family is left alone — a future button family must not inherit these values.
+    // A bare `tz-cell--` token is dropped in add() above.
+    if (/tz-cell--\$\{[A-Za-z_$][\w$]*\}/.test(m[1]!)) {
+      for (const v of SHADING_CLASS_VALUES) tokens.add(`tz-cell--${v}`);
     }
   }
   for (const m of text.matchAll(/className=\{([^`][^}]*)\}/g)) addInner(m[1]!);
@@ -178,6 +181,7 @@ describe('dead CSS classes — components.css carries no dead rules', () => {
     }
   });
 
+  // Strict pin by design: dead names are forbidden even in comments/prose — stricter than the acceptance warrants; future doc comments must use part-assembly like the header does.
   it('does not name any dead class anywhere in src/ or __tests__/', () => {
     for (const file of sourceFiles()) {
       const text = readFileSync(file, 'utf8');
