@@ -121,7 +121,7 @@ describe('iCal content line folding', () => {
   });
 });
 
-// Mirror of the (private) escapeICal: commas, semicolons, backslashes escaped, newlines to \n.
+// Mirror of the private escapeICal in src/utils/export.ts (lines ~137-141): commas, semicolons, backslashes escaped, newlines to \n. Only this mirror must track it.
 function escapeICalForTest(str: string): string {
   return str.replace(/[\\,;]/g, '\\$&').replace(/\n/g, '\\n');
 }

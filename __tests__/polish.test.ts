@@ -10,7 +10,13 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { buildUrlQuery } from '../src/utils/url';
 
-const SRC = (p: string) => readFileSync(join(process.cwd(), p), 'utf8');
+const SRC = (p: string) => {
+  try {
+    return readFileSync(join(process.cwd(), p), 'utf8');
+  } catch {
+    throw new Error(`polish.test.ts: missing source file '${p}' — the #4 acceptance tests require it (see ticket #4)`);
+  }
+};
 
 const header = SRC(join('src', 'components', 'Header.tsx'));
 const url = SRC(join('src', 'utils', 'url.ts'));
