@@ -49,7 +49,7 @@ describe('polish dead-code — spec §2 routing bullet narrowed to match the rec
   const bullet = block.join('\n');
 
   it('still routes getOffsetLabel and createDateAtTime through getOffsetMs', () => {
-    expect(bullet, 'expected a §2 routing bullet starting with "- Remove `getTzOffset`"').toBeDefined();
+    expect(bullet.length, 'expected a §2 routing bullet starting with "- Remove `getTzOffset`"').toBeGreaterThan(0);
     expect(bullet).toContain('getOffsetMs');
     expect(bullet).toMatch(/getOffsetLabel/);
     expect(bullet).toMatch(/createDateAtTime/);
@@ -84,7 +84,8 @@ describe('polish dead-code — variables.css carries only live variables', () =>
       .join('\n')
       .toLowerCase();
     for (const def of defs) {
-      expect(others, `${def} is defined in variables.css but referenced nowhere in src/`).toContain(def);
+      const usage = new RegExp(`var\\(\\s*${def}(?:\\s*,[^)]*)?\\s*\\)`, 'i');
+      expect(usage.test(others), `${def} is defined in variables.css but referenced nowhere in src/`).toBe(true);
     }
   });
 });
@@ -95,8 +96,10 @@ describe('polish dead-code — the getLocalHour decision is a short line plus a 
   const entryIndex = lines.findIndex((l) => /^- 2026-11-21 — `getLocalHour`/.test(l));
   const entry = lines[entryIndex];
 
+  // 250 chars keeps the summary line a single bullet (the original was ~1,400); 160 chars per detail
+  // line keeps the rationale paragraph wrapped like the other DECISIONS.md entries.
   it('is a short summary line (not the ~1,400-char single line)', () => {
-    expect(entry, 'expected the 2026-11-21 getLocalHour decision entry').toBeDefined();
+    expect(entry?.length, 'expected the 2026-11-21 getLocalHour decision entry').toBeGreaterThan(0);
     expect(entry!.length).toBeLessThanOrEqual(250);
   });
 
