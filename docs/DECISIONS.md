@@ -70,3 +70,7 @@ One entry each: a short `YYYY-MM-DD — decision — why — alternatives consid
   `--color-grid-header-bg`, `--spacing-tz-header-width` — were likewise never defined in `variables.css` (they live only in the historical
   design spec; pinned absent by `polish-dead-code.test.ts`), so there was nothing to remove there either. Scope note: `src/App.css` `.card`
   is likewise unreferenced, but it sits outside this ticket's explicit scope (components.css/variables.css) — recorded as a follow-up, not repaired here.
+- 2026-11-22 — pin the dynamic `prefix--${…}` suffix to the closed set from the `ShadingClass` union, not a bare `X--` prefix — the prefix treated any `X--*` class as rendered. Alternative: hardcode literals — rejected; the pin could drift.
+  The collector no longer adds a bare `prefix--` token; the template-literal branch expands each `prefix--${…}` against the union parsed from
+  `src/types/index.ts` (failing closed if the union is unparseable), so only the real classes are treated as rendered. Pinned by a closed-set unit test plus
+  the leaves-only-rendered test: a `.tz-cell--hypothetical` rule appended to components.css now fails the pin.

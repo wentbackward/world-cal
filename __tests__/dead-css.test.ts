@@ -50,6 +50,34 @@ const DEAD_CLASS_PARTS: string[][] = [
 
 const DEAD_CLASSES = DEAD_CLASS_PARTS.map((parts) => parts.join(''));
 
+const TYPES_TS = join('src', 'types', 'index.ts');
+
+/**
+ * The closed set of values for the `prefix--${…}` dynamic-suffix families in this
+ * codebase — parsed from the ShadingClass union in src/types/index.ts so the pin
+ * cannot drift from the real values. Throws if the union cannot be parsed: the
+ * pin is closed, not permissive.
+ */
+function shadingClassValues(): string[] {
+  let src: string;
+  try {
+    src = readFileSync(join(process.cwd(), TYPES_TS), 'utf8');
+  } catch {
+    throw new Error(`dead-css.test.ts: missing file '${TYPES_TS}' — the #13 pins live in this file`);
+  }
+  const m = src.match(/ShadingClass\s*=\s*([^;]+);/);
+  if (!m) {
+    throw new Error('dead-css.test.ts: could not find the ShadingClass union in src/types/index.ts');
+  }
+  const values = [...m[1]!.matchAll(/'([^']+)'|"([^"]+)"/g)].map((x) => x[1] ?? x[2]!);
+  if (values.length === 0) {
+    throw new Error('dead-css.test.ts: ShadingClass union parsed to zero values');
+  }
+  return values;
+}
+
+const SHADING_CLASS_VALUES = shadingClassValues();
+
 function readComponentsCss(): string {
   try {
     return readFileSync(join(process.cwd(), COMPONENTS_CSS), 'utf8');
@@ -78,21 +106,27 @@ function sourceFiles(): string[] {
  * class that matters is reachable through the three className patterns used in
  * this codebase, plus the querySelector selectors tests use to find them:
  *  1. className="a b …" (plain static string);
- *  2. className={` … ${…} … `} (template literal — static chunks, plus the
- *     quoted strings inside the template, e.g. the ternary `'tz-cell--selected'`);
+ *  2. className={` … ${…} … `} (template literal — static chunks, the quoted
+ *     strings inside the template (e.g. the ternary `'tz-cell--selected'`), and
+ *     the closed set of dynamic-suffix classes (`prefix--${…}` expanded against
+ *     the real values — see below);
  *  3. className={… ? 'a' : 'b'} (JSX expression with a ternary class list — no
  *     backticks inside, so the quoted-string regex stays inside one expression);
  * plus single/double-quoted `.class-name` strings in tests (querySelector /
  * querySelectorAll).
+ *
+ * The dynamic-suffix families in this codebase (e.g. `tz-cell--${shading}`) are
+ * pinned to the closed set of values, never to a bare `X--` prefix: a bare
+ * prefix would treat any `X--*` class as rendered. The suffix values are parsed
+ * at runtime from the ShadingClass union in src/types/index.ts so the pin cannot
+ * drift.
  */
-function collectTokens(text: string): { tokens: Set<string>; prefixes: Set<string> } {
+function collectTokens(text: string): { tokens: Set<string> } {
   const tokens = new Set<string>();
-  const prefixes = new Set<string>();
   const add = (raw: string) => {
     for (const tok of raw.split(/\s+/)) {
       const t = tok.replace(/^\.+/, '');
       if (/^[a-z][a-z0-9-]*$/.test(t)) tokens.add(t);
-      if (/^[a-z][a-z0-9-]*--$/.test(t)) prefixes.add(t);
     }
   };
   const addInner = (raw: string) => {
@@ -102,29 +136,28 @@ function collectTokens(text: string): { tokens: Set<string>; prefixes: Set<strin
   for (const m of text.matchAll(/className=\{`([^`]*)`\}/g)) {
     add(m[1]!.replace(/\$\{[^}]*\}/g, ' '));
     addInner(m[1]!);
+    // Closed set: expand each `prefix--${…}` dynamic suffix against the real values
+    // (parsed from the ShadingClass union) — never a bare `prefix--` token.
+    for (const mm of m[1]!.matchAll(/([a-z][a-z0-9-]*)--\$\{[A-Za-z_$][\w$]*\}/g)) {
+      for (const v of SHADING_CLASS_VALUES) tokens.add(`${mm[1]}--${v}`);
+    }
   }
   for (const m of text.matchAll(/className=\{([^`][^}]*)\}/g)) addInner(m[1]!);
   for (const m of text.matchAll(/['"](\.[a-z][a-z0-9-]*)['"]/g)) add(m[1]!);
-  return { tokens, prefixes };
+  return { tokens };
 }
 
-function referencedRefs(): { tokens: Set<string>; prefixes: Set<string> } {
+function referencedRefs(): { tokens: Set<string> } {
   const tokens = new Set<string>();
-  const prefixes = new Set<string>();
   for (const file of sourceFiles()) {
-    const { tokens: ts, prefixes: ps } = collectTokens(readFileSync(file, 'utf8'));
+    const { tokens: ts } = collectTokens(readFileSync(file, 'utf8'));
     for (const t of ts) tokens.add(t);
-    for (const p of ps) prefixes.add(p);
   }
-  return { tokens, prefixes };
+  return { tokens };
 }
 
-function isReferenced(klass: string, tokens: Set<string>, prefixes: Set<string>): boolean {
-  if (tokens.has(klass)) return true;
-  for (const prefix of prefixes) {
-    if (klass.startsWith(prefix)) return true;
-  }
-  return false;
+function isReferenced(klass: string, tokens: Set<string>): boolean {
+  return tokens.has(klass);
 }
 
 describe('dead CSS classes — components.css carries no dead rules', () => {
@@ -152,12 +185,23 @@ describe('dead CSS classes — components.css carries no dead rules', () => {
   it('leaves only classes that are actually rendered', () => {
     const classes = new Set<string>();
     for (const m of css.matchAll(/\.([a-z][a-z0-9-]*)/gi)) classes.add(m[1]!.toLowerCase());
-    const { tokens, prefixes } = referencedRefs();
+    const { tokens } = referencedRefs();
     for (const klass of classes) {
       expect(
-        isReferenced(klass, tokens, prefixes),
+        isReferenced(klass, tokens),
         `components.css defines .${klass} but nothing renders it`,
       ).toBe(true);
     }
+  });
+
+  it('pins the dynamic tz-cell-- suffix to the closed ShadingClass set — a hypothetical suffix is unrendered', () => {
+    const { tokens } = referencedRefs();
+    for (const v of SHADING_CLASS_VALUES) {
+      expect(isReferenced(`tz-cell--${v}`, tokens), `tz-cell--${v} must be rendered`).toBe(true);
+    }
+    expect(
+      isReferenced('tz-cell--hypothetical', tokens),
+      'a hypothetical tz-cell--<unknown> class must not be treated as rendered',
+    ).toBe(false);
   });
 });
