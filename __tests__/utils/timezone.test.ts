@@ -86,8 +86,10 @@ describe('getOffsetMs — hourCycle h24', () => {
       },
     });
     getOffsetMs('America/New_York', new Date('2024-06-15T04:00:00Z'));
-    expect(seen[0].hourCycle).toBe('h24');
-    expect(seen[0].hour12).toBeUndefined();
+    const options = seen[0];
+    expect(options).toBeDefined();
+    expect(options?.hourCycle).toBe('h24');
+    expect(options?.hour12).toBeUndefined();
   });
 
   it('normalizes hour 24 to 00 when the ICU is on h24 (load-bearing at midnight)', () => {
