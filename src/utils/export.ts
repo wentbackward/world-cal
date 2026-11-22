@@ -121,7 +121,7 @@ function foldICalLine(line: string): string[] {
       segments.push(current);
       current = '';
       currentBytes = 0;
-      budget = 74; // continuation lines carry a leading space octet
+      budget = 74; // continuation-budget invariant: a continuation segment carries a leading space in the line, so segments hold ≤74 octets (1 + 74 = 75)
     }
     current += char;
     currentBytes += charBytes;

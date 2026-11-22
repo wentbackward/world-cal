@@ -4,6 +4,12 @@
  * The acceptance criteria are grep-based, so the tests assert the source
  * shape directly (the symbol names are assembled from parts where needed so
  * this file itself doesn't re-match the criteria greps).
+ *
+ * Note: the tests in this file encode source-shape, not behavior — a future
+ * legitimate useMemo in the wrong spot, or a hand-rolled label helper
+ * re-appearing in a comment, would flip the assertions. Behavior is pinned
+ * by the behavior tests around these: the url.ts round-trip tests below and
+ * the iCal folding/escape tests in __tests__/utils/export.test.ts.
  */
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
