@@ -43,6 +43,9 @@ function listFiles(dir: string): string[] {
   return out;
 }
 
+// Scope is src/ and __tests__/ only: a literal removed symbol re-appearing in
+// docs/ or README.md is outside the acceptance criteria (and of this test) and
+// is intentionally not detected.
 function sourceFiles(): string[] {
   return [
     ...listFiles(join('src')),
@@ -114,6 +117,10 @@ describe('dead-code removal — CSS variables', () => {
   ];
 
   function definitions(): Map<string, number> {
+    // Local-scope definitions (e.g. --row-header-width and --row-h in
+    // components.css) are counted on purpose: the check enforces exactly one
+    // definition per referenced variable wherever it lives, not only in
+    // :root.
     const counts = new Map<string, number>();
     for (const file of cssFiles) {
       const css = readFileSync(file, 'utf8');

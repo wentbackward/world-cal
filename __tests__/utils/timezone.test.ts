@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
   getOffsetMs,
   formatTime,
@@ -70,6 +70,12 @@ describe('getLocalHour', () => {
 });
 
 describe('hour part guard', () => {
+  // Structural reset: the Intl stub is un-stubbed in afterEach, not via
+  // try/finally, so a failing assertion cannot leak the stub into later tests.
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it('throws when formatToParts omits the hour part', () => {
     vi.stubGlobal('Intl', {
       ...Intl,
@@ -85,12 +91,8 @@ describe('hour part guard', () => {
         }
       },
     });
-    try {
-      expect(() => getLocalHour(new Date('2024-06-15T04:00:00Z'), 'America/New_York')).toThrow(/hour/);
-      expect(() => getOffsetMs('America/New_York', new Date('2024-06-15T12:00:00Z'))).toThrow(/hour/);
-    } finally {
-      vi.unstubAllGlobals();
-    }
+    expect(() => getLocalHour(new Date('2024-06-15T04:00:00Z'), 'America/New_York')).toThrow(/hour/);
+    expect(() => getOffsetMs('America/New_York', new Date('2024-06-15T12:00:00Z'))).toThrow(/hour/);
   });
 });
 
