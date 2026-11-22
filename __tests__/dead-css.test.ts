@@ -118,6 +118,10 @@ function sourceFiles(): string[] {
  * site (src/components/CalendarGrid.tsx) guarantees the suffix is a ShadingClass value;
  * the parser does not (and does not claim to) assert that. Only the first
  * `tz-cell--${` in a template is validated; one occurrence exists in the codebase today.
+ * Known gap: the anchor is the literal string wherever it appears, even inside a string
+ * literal of the template itself (e.g. `${cond ? 'tz-cell--${zz}' : ''} tz-cell--${shading}`) —
+ * the scan would start at the `{` inside that literal, validate the wrong thing and expand
+ * the closed set. Documented, not handled.
  */
 function parseTzCellSuffix(text: string): void {
   const braceAt = text.indexOf('{', text.indexOf('tz-cell--${'));
@@ -287,8 +291,9 @@ describe('dead CSS classes — components.css carries no dead rules', () => {
   });
 
   it('throws a named error for a tz-cell-- suffix the pin cannot balance — no silent skip or silent expansion', () => {
-    // Constructed from parts (like the DEAD_CLASS_PARTS header) so this file's own scan of
-    // __tests__/ cannot see the raw template and fail its own invariant.
+    // Part-assembled (like the expands test) so this file's own referencedRefs()
+    // self-scan cannot see the raw template and satisfy the closed-set pin with this
+    // file's own text instead of the app's.
     const unbalanced = [
       'className={`',
       'tz-cell--',
