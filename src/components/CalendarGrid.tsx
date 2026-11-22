@@ -3,7 +3,7 @@ import { useAppState } from '../hooks/useAppState';
 import { useDragSelection } from '../hooks/useDragSelection';
 import type { CellRange } from '../hooks/useDragSelection';
 import { useMediaQuery } from '../hooks/useMediaQuery';
-import { createDateAtTime, formatTime, getShortTzLabel, getOffsetLabel } from '../utils/timezone';
+import { createDateAtTime, formatTime, getShortTzLabel, getOffsetLabel, getLocalHour } from '../utils/timezone';
 import { getShading } from '../utils/shading';
 
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
@@ -44,11 +44,7 @@ export default function CalendarGrid() {
   );
 
   const handleSelect = useCallback(
-    (cells: CellRange | null) => {
-      if (!cells) {
-        setSelection(null);
-        return;
-      }
+    (cells: CellRange) => {
       // Selection is a time range. The time axis is columns when horizontal, rows when vertical.
       const startHour = vertical ? cells.startRow : cells.startCol;
       const endHour = vertical ? cells.endRow : cells.endCol;
@@ -57,7 +53,7 @@ export default function CalendarGrid() {
     [instantAt, setSelection, vertical]
   );
 
-  const { handlers, overlayStyle, isDragging } = useDragSelection(handleSelect, {
+  const { handlers, overlayStyle, isDragging, consumeJustCanceled } = useDragSelection(handleSelect, {
     cols: vertical ? allTimezones.length : HOURS.length,
     rows: vertical ? HOURS.length : allTimezones.length,
   });
@@ -96,14 +92,24 @@ export default function CalendarGrid() {
   // One data cell: that timezone's local time at the given hour's instant.
   const renderCell = (tz: string, hour: number) => {
     const instant = instants[hour]!;
-    const localHour =
-      Number(instant.toLocaleString('en-US', { timeZone: tz, hour: 'numeric', hour12: false })) % 24;
+    const localHour = getLocalHour(instant, tz);
     const shading = getShading(localHour, state.coreHours, state.extHours);
     const isSelected = state.selection
       ? instant >= state.selection.start && instant < state.selection.end
       : false;
     const weekday = instant.toLocaleDateString('en-US', { timeZone: tz, weekday: 'short' });
     const rolled = localDateKey(instant, tz) !== primaryDayKey;
+
+    // A click that follows a just-cancelled drag (no-capture path: pointer
+    // capture unavailable, e.g. jsdom/older browsers) must not resurrect the
+    // cancelled drag as a single-hour selection — the click path consumes the
+    // justCanceled suppression flag. Keyboard activation is unconditional:
+    // spec requires Enter/Space on a focused cell to behave exactly like a click
+    // — except while a drag is in progress, where the drag owns release and the
+    // activation is ignored (see onKeyDown).
+    const selectHour = () => {
+      setSelection({ start: instant, end: instantAt(hour + 1) });
+    };
 
     return (
       <div
@@ -112,7 +118,18 @@ export default function CalendarGrid() {
         role="button"
         tabIndex={0}
         aria-label={`${getShortTzLabel(tz)} ${weekday} ${formatTime(instant, tz)}`}
-        onClick={() => setSelection({ start: instant, end: instantAt(hour + 1) })}
+        onClick={() => {
+          if (consumeJustCanceled()) return;
+          selectHour();
+        }}
+        onKeyDown={(e) => {
+          // Mid-drag: the drag owns release and its commit overwrites whatever a
+          // cell activation would set, so activation is ignored entirely.
+          if (isDragging) return;
+          if (e.key !== 'Enter' && e.key !== ' ') return;
+          e.preventDefault();
+          selectHour();
+        }}
       >
         <span className="cell-time">{formatTime(instant, tz)}</span>
         <span className={`cell-day ${rolled ? 'cell-day--rolled' : ''}`}>{weekday}</span>

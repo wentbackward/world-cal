@@ -93,6 +93,10 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     setState((prev) => ({ ...prev, selection }));
   }, []);
 
+  // DECISION (ticket #4): setViewDate clears the selection. Changing the view
+  // date re-anchors the whole grid to a different day, and a selection anchored
+  // to the previous day is not meaningful — so it is dropped deliberately.
+  // The behavior is kept as-is; only the rationale is documented here.
   const setViewDate = useCallback((date: Date) => {
     setState((prev) => ({ ...prev, viewDate: date, selection: null }));
   }, []);

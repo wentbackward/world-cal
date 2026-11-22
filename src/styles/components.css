@@ -265,8 +265,8 @@
 }
 
 .v-corner {
-  width: var(--hour-axis-width, 56px);
-  min-width: var(--hour-axis-width, 56px);
+  width: var(--spacing-time-axis-width);
+  min-width: var(--spacing-time-axis-width);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -313,8 +313,8 @@
 }
 
 .v-hour-axis {
-  width: var(--hour-axis-width, 56px);
-  min-width: var(--hour-axis-width, 56px);
+  width: var(--spacing-time-axis-width);
+  min-width: var(--spacing-time-axis-width);
   border-right: 1px solid var(--border-subtle);
   background: var(--bg-elevated);
 }
@@ -912,34 +912,6 @@
 
 .picker-list::-webkit-scrollbar-thumb:hover {
   background: var(--border-strong);
-}
-
-/* Loading Spinner */
-.loading-spinner {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  min-height: 200px;
-  gap: 1rem;
-}
-
-.spinner-ring {
-  width: 40px;
-  height: 40px;
-  border: 3px solid var(--border-subtle);
-  border-top-color: var(--color-btn-primary);
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
-.loading-spinner p {
-  color: var(--color-text-muted);
-  font-size: 0.875rem;
 }
 
 /* Responsive Layout */

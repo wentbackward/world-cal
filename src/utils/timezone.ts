@@ -1,19 +1,14 @@
 /**
- * Get the UTC offset in hours for a timezone at a given date.
+ * Fetch a named part from formatToParts output. The format guarantees the parts
+ * in practice; a missing one is a genuine bug, so fail loudly with the part
+ * named rather than let NaN leak into Date.UTC.
  */
-export function getTzOffset(tz: string, date: Date): number {
-  const utcStr = date.toLocaleString('en-US', { timeZone: 'UTC' });
-  const tzStr = date.toLocaleString('en-US', { timeZone: tz });
-  const utcDate = new Date(utcStr);
-  const tzDate = new Date(tzStr);
-  return (tzDate.getTime() - utcDate.getTime()) / (1000 * 60 * 60);
-}
-
-/**
- * Sort timezone list by UTC offset at a given date.
- */
-export function sortTimezonesByOffset(tzs: string[], date: Date): string[] {
-  return [...tzs].sort((a, b) => getTzOffset(a, date) - getTzOffset(b, date));
+function requiredPart(map: Record<string, string>, key: string): string {
+  const value = map[key];
+  if (value === undefined) {
+    throw new Error(`required part "${key}" missing from Intl formatToParts output`);
+  }
+  return value;
 }
 
 /**
@@ -45,11 +40,11 @@ export function formatDate(date: Date, tz: string, locale: string = 'en-US'): st
  * Handles half-hour and quarter-hour zones (Adelaide, Mumbai, Kathmandu, ...).
  */
 export function getOffsetLabel(tz: string, date: Date = new Date()): string {
-  const hours = getTzOffset(tz, date);
-  const sign = hours < 0 ? '-' : '+';
-  const abs = Math.abs(hours);
-  const h = Math.floor(abs);
-  const m = Math.round((abs - h) * 60);
+  const minutes = Math.round(getOffsetMs(tz, date) / (1000 * 60));
+  const sign = minutes < 0 ? '-' : '+';
+  const abs = Math.abs(minutes);
+  const h = Math.floor(abs / 60);
+  const m = abs % 60;
   return m ? `UTC${sign}${h}:${String(m).padStart(2, '0')}` : `UTC${sign}${h}`;
 }
 
@@ -63,10 +58,20 @@ export function getShortTzLabel(tz: string): string {
 }
 
 /**
- * Get the local hour in a given timezone for a Date.
+ * Get the local hour in a given timezone for a Date, as a number in 0-23.
+ * Built on formatToParts (hourCycle "h24"), which emits midnight as hour "24";
+ * normalized to 0.
  */
 export function getLocalHour(date: Date, tz: string): number {
-  return parseInt(date.toLocaleString('en-US', { timeZone: tz, hour: 'numeric', hour12: false }), 10);
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: tz,
+    hour: '2-digit',
+    hourCycle: 'h24',
+  }).formatToParts(date);
+  const map: Record<string, string> = {};
+  for (const p of parts) map[p.type] = p.value;
+  const hour = Number(requiredPart(map, 'hour'));
+  return hour === 24 ? 0 : hour;
 }
 
 /**
@@ -84,7 +89,7 @@ export function getLocalTimezone(): string {
  * Get a timezone's offset from UTC, in milliseconds (tz - UTC), at a given instant.
  * Uses formatToParts so it does not depend on Date being able to parse a locale string.
  */
-function getTzOffsetMs(tz: string, date: Date): number {
+export function getOffsetMs(tz: string, date: Date): number {
   const parts = new Intl.DateTimeFormat('en-US', {
     timeZone: tz,
     year: 'numeric',
@@ -98,18 +103,27 @@ function getTzOffsetMs(tz: string, date: Date): number {
 
   const map: Record<string, string> = {};
   for (const p of parts) map[p.type] = p.value;
+  const year = requiredPart(map, 'year');
+  const month = requiredPart(map, 'month');
+  const day = requiredPart(map, 'day');
+  const minute = requiredPart(map, 'minute');
+  const second = requiredPart(map, 'second');
   // Intl can emit hour "24" for midnight; normalize to 0.
-  const hour = map.hour === '24' ? '00' : map.hour!;
+  const rawHour = requiredPart(map, 'hour');
+  const hour = rawHour === '24' ? '00' : rawHour;
 
   const asUtc = Date.UTC(
-    Number(map.year),
-    Number(map.month) - 1,
-    Number(map.day),
+    Number(year),
+    Number(month) - 1,
+    Number(day),
     Number(hour),
-    Number(map.minute),
-    Number(map.second)
+    Number(minute),
+    Number(second)
   );
-  return asUtc - date.getTime();
+  // formatToParts truncates to whole seconds, so compare against the floored
+  // reference instant rather than the raw caller value (which may carry ms).
+  const reference = Math.floor(date.getTime() / 1000) * 1000;
+  return asUtc - reference;
 }
 
 /**
@@ -119,12 +133,12 @@ function getTzOffsetMs(tz: string, date: Date): number {
 export function createDateAtTime(year: number, month: number, day: number, hour: number, minute: number, tz: string): Date {
   // First guess: treat the wall-clock time as if it were UTC, then correct by the offset.
   const guess = Date.UTC(year, month, day, hour, minute, 0);
-  const offset = getTzOffsetMs(tz, new Date(guess));
+  const offset = getOffsetMs(tz, new Date(guess));
   let ts = guess - offset;
 
   // Re-check the offset at the corrected instant. Around DST transitions the offset
   // can differ; a second pass converges to the correct wall-clock time.
-  const offset2 = getTzOffsetMs(tz, new Date(ts));
+  const offset2 = getOffsetMs(tz, new Date(ts));
   if (offset2 !== offset) {
     ts = guess - offset2;
   }

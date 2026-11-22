@@ -42,7 +42,9 @@ function generateICalLink(selection: TimeRange, tz: string, title: string, descr
     'STATUS:TENTATIVE',
     'END:VEVENT',
     'END:VCALENDAR',
-  ].join('\r\n');
+  ]
+    .flatMap(foldICalLine)
+    .join('\r\n');
 
   return `data:text/calendar;charset=utf8;base64,${btoa(unescape(encodeURIComponent(icsContent)))}`;
 }
@@ -99,6 +101,34 @@ function formatDateForICal(date: Date): string {
  */
 function formatDateISO(date: Date): string {
   return date.toISOString().replace(/\.\d{3}Z$/, 'Z');
+}
+
+/**
+ * Fold a single iCal content line into at most 75-octet segments, joined with
+ * CRLF + a single leading space (the standard iCal folding rule). Splits at
+ * code-point boundaries, never inside a multi-byte UTF-8 character.
+ */
+function foldICalLine(line: string): string[] {
+  if (!line) return [''];
+  const encoder = new TextEncoder();
+  const segments: string[] = [];
+  let current = '';
+  let currentBytes = 0;
+  let budget = 75;
+  for (const char of line) {
+    const charBytes = encoder.encode(char).length;
+    if (currentBytes + charBytes > budget) {
+      segments.push(current);
+      current = '';
+      currentBytes = 0;
+      budget = 74; // continuation lines carry a leading space octet
+    }
+    current += char;
+    currentBytes += charBytes;
+  }
+  if (current.length > 0) segments.push(current);
+  // Continuation segments are preceded by CRLF + one leading space.
+  return segments.flatMap((segment, i) => (i === 0 ? [segment] : [` ${segment}`]));
 }
 
 /**
