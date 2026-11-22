@@ -174,8 +174,16 @@ describe('deploy workflow — version gate', () => {
     expect(buildJob).toMatch(/needs:\s*\[test, version-check\]/);
   });
 
-  it('gates only tag pushes', () => {
-    expect(versionCheckJob).toContain("startsWith(github.ref, 'refs/tags/')");
+  it('runs on every trigger and no-ops non-tag refs via the semver pattern', () => {
+    // The job must run on every trigger: the build job's needs-chain
+    // would inherit "skipped" for workflow_dispatch otherwise, leaving
+    // the operator escape hatch unable to run. The tag-only gate lives
+    // in the script (the semver pattern reports ok=false for any ref
+    // that does not match) and in the build job's `if` (tag pushes run
+    // only with ok=true; workflow_dispatch runs regardless).
+    expect(versionCheckJob).not.toMatch(/^\s*if:/m); // must not be skipped
+    expect(versionCheckJob).toContain('ok=false'); // any non-matching ref
+    expect(buildJobIf(buildJob)).toContain("startsWith(github.ref, 'refs/tags/')"); // the dispatch/tag split lives in the build job's if:
   });
 
   it('pins Node 20 via setup-node (the gate does not rely on the runner pre-installed node)', () => {
