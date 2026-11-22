@@ -63,6 +63,7 @@ function runVersionGate(tag: string): { code: number; output: string } {
         cwd: process.cwd(), // repo root — script reads ./package.json
         env: { ...process.env, GITHUB_REF_NAME: tag, GITHUB_OUTPUT: out },
         stdio: ['ignore', 'pipe', 'pipe'],
+        timeout: 30000,
       });
     } catch (error) {
       code = (error as { status?: number }).status ?? 1;
@@ -82,7 +83,9 @@ const deployJob = jobBlock('deploy');
 describe('deploy workflow — triggers', () => {
   it('triggers the lightweight gate on main pushes, tag pushes, PRs and manual dispatch', () => {
     expect(onBlock).toContain('branches: [main]');
-    expect(onBlock).toMatch(/tags:/);
+    // The on: glob must match any tag name (incl. slash-carrying candidates);
+    // the version gate's regex is the actual stable/candidate discriminator.
+    expect(onBlock).toContain("tags: ['**']");
     expect(onBlock).toContain('pull_request:');
     expect(onBlock).toContain('workflow_dispatch:');
   });
