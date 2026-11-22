@@ -6,20 +6,19 @@
  * meaningful when the grid re-anchors to another day.
  */
 import { describe, it, expect, afterEach, beforeEach } from 'vitest';
+import { useEffect } from 'react';
 import { render, act, cleanup } from '@testing-library/react';
 import { AppStateProvider, useAppState } from '../../src/hooks/useAppState';
-import type { AppState, TimeRange } from '../../src/types';
 
-let captured: {
-  state: AppState;
-  addSecondaryTz: (tz: string) => void;
-  setSelection: (s: TimeRange | null) => void;
-  setViewDate: (d: Date) => void;
-} | null = null;
+type AppCtx = ReturnType<typeof useAppState>;
+
+let captured: AppCtx | null = null;
 
 function Probe() {
-  const { state, addSecondaryTz, setSelection, setViewDate } = useAppState();
-  captured = { state, addSecondaryTz, setSelection, setViewDate };
+  const ctx = useAppState();
+  useEffect(() => {
+    captured = ctx;
+  }, [ctx]);
   return null;
 }
 

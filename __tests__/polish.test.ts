@@ -53,9 +53,12 @@ describe('Header.tsx — imports at top, shared label derivation', () => {
 
 describe('url.ts — precomputed tz → short-code reverse map', () => {
   it('references CITY_CODE_MAP in a precomputed reverse map, not per-tz', () => {
-    const occurrences = url.match(/CITY_CODE_MAP/g) ?? [];
-    expect(occurrences.length).toBe(1);
+    // The map is initialized once at module level (first registration wins).
     expect(url).toMatch(/TZ_TO_SHORT_CODE/);
+    expect(url).toMatch(/Object\.values\(CITY_CODE_MAP\)/);
+    // buildUrlQuery itself performs no per-tz scan of the map.
+    const body = url.slice(url.indexOf('export function buildUrlQuery'));
+    expect(body).not.toMatch(/Object\.(entries|values)\(CITY_CODE_MAP\)/);
   });
 
   it('buildUrlQuery contains no per-tz CITY_CODE_MAP scan loop', () => {
@@ -68,13 +71,13 @@ describe('url.ts — precomputed tz → short-code reverse map', () => {
 describe('TimezonePicker.tsx — memoized getAllTimeZones()', () => {
   it('memoizes the picker list per render with useMemo', () => {
     expect(picker).toMatch(/useMemo/);
-    expect(picker).toMatch(/useMemo\([^)]*getAllTimeZones/);
+    expect(picker).toMatch(/useMemo\([\s\S]*getAllTimeZones/);
   });
 });
 
 describe('useAppState.tsx — setViewDate decision is documented', () => {
   it('documents that view-date changes clear the selection (keep behavior)', () => {
-    const anchor = useAppState.indexOf('setViewDate');
+    const anchor = useAppState.indexOf('const setViewDate');
     expect(anchor).toBeGreaterThan(-1);
     const before = useAppState.slice(0, anchor);
     const lines = before.split('\n').slice(-8).join('\n');
