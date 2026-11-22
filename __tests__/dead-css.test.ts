@@ -106,6 +106,32 @@ function sourceFiles(): string[] {
 }
 
 /**
+ * Parse the dynamic suffix of a `tz-cell--${…}` template expression, brace-balanced so a
+ * bare identifier (`${shading}`), a call (`${getShading(h)}`), a method call
+ * (`${shading.trim()}`) or a nested-brace expression (`${cond ? {a: 'b'} : 'c'}`) is
+ * recognised rather than mis-matched against a bare identifier. Returns the expression
+ * text. The closed-set pin asserts the suffix IS a ShadingClass value; a template this
+ * parser cannot balance must never be silently skipped (→ a misleading "tz-cell--core
+ * must be rendered" failure) nor silently expanded (→ the closed set claiming a rendering
+ * that never happened). Throws a named, actionable error in that case.
+ */
+function parseTzCellSuffix(text: string): string {
+  const braceAt = text.indexOf('{', text.indexOf('tz-cell--${'));
+  let depth = 0;
+  for (let j = braceAt; j < text.length; j++) {
+    const c = text[j];
+    if (c === '{') depth++;
+    else if (c === '}') {
+      depth--;
+      if (depth === 0) return text.slice(braceAt + 1, j);
+    }
+  }
+  throw new Error(
+    'dead-css.test.ts: cannot parse the dynamic suffix in a tz-cell--${…} template — extend the pin to accept this shape deliberately',
+  );
+}
+
+/**
  * Class tokens actually used by the app or its tests — the complete definition
  * of "rendered": the app never styles anything outside className, so every
  * class that matters is reachable through the three className patterns used in
@@ -150,7 +176,10 @@ function collectTokens(text: string): { tokens: Set<string> } {
     // real values (parsed from the ShadingClass union). Any other `prefix--${…}`
     // family is left alone — a future button family must not inherit these values.
     // A bare `tz-cell--` token is dropped in add() above.
-    if (/tz-cell--\$\{[A-Za-z_$][\w$]*\}/.test(m[1]!)) {
+    // A suffix the parser cannot balance is rejected with a named error (fail closed)
+    // instead of a misleading "must be rendered" failure downstream.
+    if (m[1]!.includes('tz-cell--${')) {
+      parseTzCellSuffix(m[1]!);
       for (const v of SHADING_CLASS_VALUES) tokens.add(`tz-cell--${v}`);
     }
   }
@@ -220,19 +249,35 @@ describe('dead CSS classes — components.css carries no dead rules', () => {
     }
   });
 
-  it('expands any brace-free tz-cell-- suffix expression against the closed ShadingClass set', () => {
-    // Synthetic inputs: a future `tz-cell--${getShading(h)}` or `tz-cell--${shading.trim()}`
-    // must still expand the closed set — not fall back to "must be rendered", which would
-    // report the wrong problem. No real file contains either expression.
+  it('expands any brace-balanced tz-cell-- suffix expression against the closed ShadingClass set', () => {
+    // Synthetic inputs: a future `tz-cell--${getShading(h)}`, `tz-cell--${shading.trim()}`
+    // or a nested-brace expression must still expand the closed set — not fall back to
+    // "must be rendered", which would report the wrong problem. No real file contains
+    // either expression.
     for (const template of [
       'className={`tz-cell--${getShading(localHour)}`}',
       'className={`tz-cell--${shading.trim()}`}',
+      "className={`tz-cell--${cond ? {a: 'b'} : 'c'}`}",
     ]) {
       const { tokens } = collectTokens(template);
       for (const v of SHADING_CLASS_VALUES) {
         expect(tokens.has(`tz-cell--${v}`), `tz-cell--${v} must be treated as rendered`).toBe(true);
       }
     }
+  });
+
+  it('throws a named error for a tz-cell-- suffix the pin cannot balance — no silent skip or silent expansion', () => {
+    // Constructed from parts (like the DEAD_CLASS_PARTS header) so this file's own scan of
+    // __tests__/ cannot see the raw template and fail its own invariant.
+    const unbalanced = [
+      'className={`',
+      'tz-cell--',
+      '${',
+      'getShading(localHour',
+      '`',
+      '}',
+    ].join('');
+    expect(() => collectTokens(unbalanced)).toThrow(/cannot parse the dynamic suffix in a tz-cell--/);
   });
 
   it('pins the dynamic tz-cell-- suffix to the closed ShadingClass set — a hypothetical suffix is unrendered', () => {
