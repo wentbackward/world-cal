@@ -100,7 +100,10 @@ export function getOffsetMs(tz: string, date: Date): number {
     Number(map.minute),
     Number(map.second)
   );
-  return asUtc - date.getTime();
+  // formatToParts truncates to whole seconds, so compare against the floored
+  // reference instant rather than the raw caller value (which may carry ms).
+  const reference = Math.floor(date.getTime() / 1000) * 1000;
+  return asUtc - reference;
 }
 
 /**
