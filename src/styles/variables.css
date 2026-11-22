@@ -14,9 +14,6 @@
   --color-selection: rgba(88, 166, 255, 0.15);
   --color-selection-border: rgba(88, 166, 255, 0.6);
 
-  /* Grid */
-  --color-grid-today-bg: rgba(88, 166, 255, 0.06);
-
   /* Typography */
   --color-text-primary: #f0f6fc;
   --color-text-secondary: #8b949e;
@@ -29,11 +26,9 @@
   /* Buttons */
   --color-btn-primary: #58a6ff;
   --color-btn-primary-hover: #79c0ff;
-  --color-btn-secondary: rgba(255, 255, 255, 0.06);
   --color-btn-secondary-hover: rgba(255, 255, 255, 0.1);
 
   /* Spacing */
-  --spacing-cell-height: 36px;
   --spacing-time-axis-width: 56px;
 
   /* Accents */
