@@ -44,6 +44,12 @@ The app builds to a static `dist/` directory and runs as a small container.
   it to GHCR with `latest` and the commit-SHA tags. The image name is
   `world_cal` (underscore), not `world-cal` — the repo and the image differ,
   so the published image is `ghcr.io/<owner>/world_cal`.
+  The package is kept **public** so the VPS pull is anonymous — the build
+  uses the automatic `GITHUB_TOKEN` (no custom token secret), and the deploy
+  step uploads no credentials over SSH. Anonymous pulls hit the GHCR rate
+  limit if the deploy re-pulls the same image more than a few times per
+  hour; the escape hatch is a one-time `docker login` with a read-only
+  token stored on the VPS.
 - **CI/CD pipeline** — `.github/workflows/deploy.yml` is the release
   pipeline:
   - *Main push, pull request, or candidate tag* (does not match
