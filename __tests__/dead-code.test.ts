@@ -100,7 +100,7 @@ describe('dead-code removal — url.ts', () => {
     const url = readFileSync(join('src', 'utils', 'url.ts'), 'utf8');
     const detector = 'getLocal' + 'Timezone';
     const importRe = new RegExp(
-      `import\\s*\\{[^}]*\\b${detector}\\b[^}]*\\}\\s*from\\s*['"]\\.\\./utils/timezone['"]`,
+      `import\\s*\\{[^}]*\\b${detector}\\b[^}]*\\}\\s*from\\s*['"](?:\\./timezone|\\.\\./utils/timezone)['"]`,
     );
     expect(url).toMatch(importRe);
   });
@@ -118,7 +118,7 @@ describe('dead-code removal — CSS variables', () => {
     for (const file of cssFiles) {
       const css = readFileSync(file, 'utf8');
       for (const m of css.matchAll(/(--[a-z0-9-]+)\s*:/gi)) {
-        const name = m[1].toLowerCase();
+        const name = m[1]!.toLowerCase();
         counts.set(name, (counts.get(name) ?? 0) + 1);
       }
     }
@@ -130,7 +130,7 @@ describe('dead-code removal — CSS variables', () => {
     for (const file of [join('src', 'App.css'), join('src', 'styles', 'components.css')]) {
       const css = readFileSync(file, 'utf8');
       for (const m of css.matchAll(/var\(\s*(--[a-z0-9-]+)/gi)) {
-        refs.add(m[1].toLowerCase());
+        refs.add(m[1]!.toLowerCase());
       }
     }
     const defs = definitions();
