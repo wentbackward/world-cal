@@ -6,10 +6,12 @@
  * handler so the two stay in lockstep by construction.
  *
  * Anything else — e.g. a focused button — is intentionally not excluded: an
- * Escape aimed at one still carries the default (the hook cancels an in-progress
- * drag; the app clears a committed selection). The hook is inert outside a drag,
- * so a button-aimed Escape is harmless there; the helper excludes typing gestures,
- * not every focused element.
+ * Escape aimed at one still carries the default (the hook cancels an
+ * in-progress drag; the app clears a committed selection). The hook only acts
+ * while a drag is in progress, so on a button-aimed Escape outside a drag the
+ * hook is inert — but the app-level handler still clears a committed selection
+ * in that case; the helper excludes typing gestures, not every focused
+ * element.
  */
 export function shouldIgnoreEscape(e: KeyboardEvent): boolean {
   if (e.defaultPrevented) return true;
