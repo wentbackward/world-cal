@@ -54,6 +54,8 @@ describe('getOffsetMs', () => {
   it('returns the offset at local midnight (hour 24 normalized to 0)', () => {
     // 2024-06-15T04:00:00Z is exactly 00:00 EDT in New York — DST in effect.
     expect(getOffsetMs('America/New_York', new Date('2024-06-15T04:00:00Z'))).toBe(-4 * 60 * 60 * 1000);
+    // 2024-01-15T05:00:00Z is exactly 00:00 EST in New York — winter, the other offset.
+    expect(getOffsetMs('America/New_York', new Date('2024-01-15T05:00:00Z'))).toBe(-5 * 60 * 60 * 1000);
   });
 });
 
@@ -64,27 +66,35 @@ describe('getOffsetMs — hourCycle h24', () => {
     vi.unstubAllGlobals();
   });
 
-  it('requests hourCycle "h24" with no hour12 override', () => {
-    const seen: Array<Record<string, unknown>> = [];
+  // The real ICU emits hour "24" at local midnight under h24.
+  function midnightParts() {
+    return [
+      { type: 'year', value: '2024' },
+      { type: 'month', value: '06' },
+      { type: 'day', value: '15' },
+      { type: 'hour', value: '24' },
+      { type: 'minute', value: '00' },
+      { type: 'second', value: '00' },
+    ];
+  }
+
+  function stubIntlWithParts(parts: Array<{ type: string; value: string }>, seen?: Array<Record<string, unknown>>) {
     vi.stubGlobal('Intl', {
       ...Intl,
       DateTimeFormat: class {
         constructor(_local: unknown, options: Record<string, unknown>) {
-          seen.push(options);
+          seen?.push(options);
         }
         formatToParts() {
-          // The real ICU emits hour "24" at local midnight under h24.
-          return [
-            { type: 'year', value: '2024' },
-            { type: 'month', value: '06' },
-            { type: 'day', value: '15' },
-            { type: 'hour', value: '24' },
-            { type: 'minute', value: '00' },
-            { type: 'second', value: '00' },
-          ];
+          return parts;
         }
       },
     });
+  }
+
+  it('requests hourCycle "h24" with no hour12 override', () => {
+    const seen: Array<Record<string, unknown>> = [];
+    stubIntlWithParts(midnightParts(), seen);
     getOffsetMs('America/New_York', new Date('2024-06-15T04:00:00Z'));
     const options = seen[0];
     expect(options).toBeDefined();
@@ -93,21 +103,7 @@ describe('getOffsetMs — hourCycle h24', () => {
   });
 
   it('normalizes hour 24 to 00 when the ICU is on h24 (load-bearing at midnight)', () => {
-    vi.stubGlobal('Intl', {
-      ...Intl,
-      DateTimeFormat: class {
-        formatToParts() {
-          return [
-            { type: 'year', value: '2024' },
-            { type: 'month', value: '06' },
-            { type: 'day', value: '15' },
-            { type: 'hour', value: '24' },
-            { type: 'minute', value: '00' },
-            { type: 'second', value: '00' },
-          ];
-        }
-      },
-    });
+    stubIntlWithParts(midnightParts());
     // 00:00 in New York (EDT, -4) 2024-06-15 is 04:00Z — the same instant as the
     // behavioral midnight test; the "24" emission must normalize, not leak as 24:00.
     expect(getOffsetMs('America/New_York', new Date('2024-06-15T04:00:00Z'))).toBe(-4 * 60 * 60 * 1000);
