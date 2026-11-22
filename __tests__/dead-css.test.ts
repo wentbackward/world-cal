@@ -203,6 +203,19 @@ describe('dead CSS classes — components.css carries no dead rules', () => {
     }
   });
 
+  it('does not expand a non-tz-cell dynamic-suffix family against the ShadingClass values', () => {
+    // Synthetic input: a future prefix--${…} template (e.g. btn--) must not inherit
+    // the tz-cell family's closed set. `shading` here is only raw template text —
+    // no real file contains it.
+    const { tokens } = collectTokens('className={`btn--${shading}`}');
+    for (const v of SHADING_CLASS_VALUES) {
+      expect(
+        tokens.has(`btn--${v}`),
+        `btn--${v} must not be treated as rendered`,
+      ).toBe(false);
+    }
+  });
+
   it('pins the dynamic tz-cell-- suffix to the closed ShadingClass set — a hypothetical suffix is unrendered', () => {
     const { tokens } = referencedRefs();
     for (const v of SHADING_CLASS_VALUES) {
