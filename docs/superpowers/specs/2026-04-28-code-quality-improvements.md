@@ -34,7 +34,9 @@ A follow-up review of the current codebase flagged a small number of real defect
 
 **Spec.**
 
-- Remove `getTzOffset` and route everything (`getOffsetLabel`, `sortTimezonesByOffset` if kept, `getLocalHour`) through a single `getOffsetMs` built on `Intl.DateTimeFormat().formatToParts`.
+- Remove `getTzOffset` and route everything that needs an offset (`getOffsetLabel`, `sortTimezonesByOffset` if kept, `createDateAtTime`) through a single `getOffsetMs` built on `Intl.DateTimeFormat().formatToParts`.
+  `getLocalHour` is the deliberate exception — it prints a local hour, not a millisecond offset — and keeps its own `hourCycle: "h24"` + `24 → 0` normalization path rather than deriving from `getOffsetMs`.
+  The acceptance criteria require only `getOffsetLabel` and `createDateAtTime` to route through `getOffsetMs` (recorded in `docs/DECISIONS.md`, the getLocalHour entry; see issue #2).
 - Fix `getLocalHour` to return 0–23 (normalize `24` → `0`).
 - Keep `getTzOffset`/`sortTimezonesByOffset` removed unless a caller is added; tests must cover the replacement.
 

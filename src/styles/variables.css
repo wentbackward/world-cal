@@ -15,8 +15,6 @@
   --color-selection-border: rgba(88, 166, 255, 0.6);
 
   /* Grid */
-  --color-grid-border: rgba(255, 255, 255, 0.06);
-  --color-grid-header-bg: rgba(255, 255, 255, 0.03);
   --color-grid-today-bg: rgba(88, 166, 255, 0.06);
 
   /* Typography */
@@ -37,7 +35,6 @@
   /* Spacing */
   --spacing-cell-height: 36px;
   --spacing-time-axis-width: 56px;
-  --spacing-tz-header-width: 120px;
 
   /* Accents */
   --color-accent-blue: #58a6ff;
