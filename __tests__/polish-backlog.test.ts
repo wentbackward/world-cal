@@ -21,16 +21,36 @@ const exportTest = SRC(join('__tests__', 'utils', 'export.test.ts'));
 const exportSource = SRC(join('src', 'utils', 'export.ts'));
 const polishTest = SRC(join('__tests__', 'polish.test.ts'));
 
+// The line-range pin must catch the phrasing class a stale range takes ("line 137",
+// "lines ~137-141", "line numbers: ~137-141") — the phrasing class, not the exact words.
+// `\b` keeps "newlines" from matching; `[ \t]+` keeps the gap on one line.
+const LINE_RANGE_PATTERN = /\blines?(?:[ \t]+\w+)?[ \t]*:?[ \t]*~?[ \t]*\d/i;
+
+// Slice the `//` comment block that contains the anchor line, from the line start
+// through every consecutive `//` line — a stale range on a re-wrapped continuation
+// line must not silently pass.
+const sliceMirrorComment = (source: string, anchorIndex: number): string => {
+  const lineStart = source.lastIndexOf('\n', anchorIndex) + 1;
+  const block: string[] = [];
+  for (const line of source.slice(lineStart).split('\n')) {
+    if (/^\s*\/\//.test(line)) block.push(line);
+    else break;
+  }
+  return block.join('\n');
+};
+
 describe('polish backlog #16 — review findings re #4', () => {
   it('anchors the escapeICal mirror comment to the symbol name, not a stale line range', () => {
     // The mirror lives in __tests__/utils/export.test.ts alongside the tests that use it;
     // it must name the symbol it mirrors, not a line range that drifts as the file moves.
     const anchorIndex = exportTest.indexOf('Mirror of the private escapeICal');
     expect(anchorIndex, 'expected the escapeICal mirror comment anchored to the symbol name').toBeGreaterThan(-1);
-    // Scope the line-range check to the mirror-comment line itself — a legitimate
-    // line range in another comment of this file must not flip this test.
-    const mirrorComment = exportTest.slice(anchorIndex, exportTest.indexOf('\n', anchorIndex));
-    expect(mirrorComment, 'mirror comment must not cite a line range').not.toMatch(/lines?\s*~?\d/i);
+    // Scope the line-range check to the mirror-comment block itself — a legitimate
+    // line range in another comment of this file must not flip this test. The block
+    // must still contain the anchor, so a non-comment line can never vacate the check.
+    const mirrorComment = sliceMirrorComment(exportTest, anchorIndex);
+    expect(mirrorComment, 'mirror block slice must contain the anchor line').toContain('Mirror of the private escapeICal');
+    expect(mirrorComment, 'mirror comment must not cite a line range').not.toMatch(LINE_RANGE_PATTERN);
   });
 
   it('states the continuation-budget invariant on the folding budget mutation', () => {
@@ -54,4 +74,38 @@ describe('polish backlog #16 — review findings re #4', () => {
   it('notes that the polish tests encode source-shape, not behavior', () => {
     expect(polishTest).toMatch(/source-shape/i);
   });
+
+  it('slices the mirror comment through the end of the comment block', () => {
+    // If the mirror comment is ever re-wrapped onto two lines, a stale range on
+    // the continuation line must not silently pass — one-line slicing only
+    // covers the anchor line.
+    const fake = [
+      '// Mirror of the private escapeICal in src/utils/export.ts: commas, semicolons, backslashes escaped.',
+      '// continuation line: lines ~137-141',
+      'const escapeICalForTest = (str: string): string => str;',
+      '',
+    ].join('\n');
+    const anchorIndex = fake.indexOf('Mirror of the private escapeICal');
+    const block = sliceMirrorComment(fake, anchorIndex);
+    expect(block, 'the comment block slice must include the continuation line').toContain('lines ~137-141');
+    expect(block, 'the comment block slice must stop at the first non-comment line').not.toContain('escapeICalForTest');
+  });
+
+  it('rejects line ranges described with words before the digit', () => {
+    // The stale ranges live in this phrasing class; all of these must match.
+    for (const phrasing of [
+      'line 137',
+      'lines ~137-141',
+      'line numbers: ~137-141',
+      'line numbers:137',
+      'line range 137',
+    ]) {
+      expect(phrasing, `expected "${phrasing}" to match the line-range pattern`).toMatch(LINE_RANGE_PATTERN);
+    }
+    // Digit-free phrasings must not fire.
+    for (const phrasing of ['the lines above', 'lines below', 'line numbers are described in the doc']) {
+      expect(phrasing, `expected "${phrasing}" to NOT match the line-range pattern`).not.toMatch(LINE_RANGE_PATTERN);
+    }
+  });
 });
+
