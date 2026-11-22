@@ -35,9 +35,37 @@ npm run build    # produce a static build in dist/
 
 ## Deployment
 
-`npm run build` outputs static files to `dist/`. The app is served from the
-`/world-cal/` subpath (configured via `base` in `vite.config.ts`); upload the
-contents of `dist/` to that folder on the host.
+The app builds to a static `dist/` directory and runs as a small container.
+
+- **Docker image** — the `Dockerfile` is a multi-stage build: Node 20
+  produces the static bundle, then a minimal Caddy image copies `dist/`
+  and serves it on port 80.
+- **GHCR** — the `Deploy World-Cal` workflow builds the image and publishes
+  it to GHCR with `latest` and the commit-SHA tags. The image name is
+  `world_cal` (underscore), not `world-cal` — the repo and the image differ,
+  so the published image is `ghcr.io/<owner>/world_cal`.
+- **CI/CD pipeline** — `.github/workflows/deploy.yml` is the release
+  pipeline:
+  - *Main push, pull request, or candidate tag* (does not match
+    `^v[0-9]+\.[0-9]+\.[0-9]+$`) → lightweight unit-test gate only (lint +
+    unit tests). No Docker build, publish, or deploy.
+  - *Stable tag push matching `^v[0-9]+\.[0-9]+\.[0-9]+$`* → full pipeline:
+    unit tests → version gate → Docker build + publish to GHCR → SSH deploy
+    to the VPS. The **version gate** compares the tag against the
+    `package.json` `version` and refuses the run (non-zero exit) on any
+    disagreement, so a tag can never publish or deploy a build whose
+    version does not match.
+  - *`workflow_dispatch`* → the **operator escape hatch** — the full
+    pipeline runs as a deploy of the current HEAD with no tag (e.g. redeploy
+    of an already-built artifact). The version gate is skipped because
+    there is no tag to check.
+- **Caddy reverse proxy** — the app container serves on port 80 behind a
+  Caddy reverse proxy; the example route lives in
+  `infra/Caddyfile.example`.
+- **Assets** — `vite.config.ts` sets `base: './'`, so the build writes
+  relative asset URLs (`./assets/…`) and the app serves from any path —
+  a `/world-cal/` subpath or a root domain. Relative asset resolution
+  still expects a trailing slash on the URL.
 
 ## Tech stack
 
