@@ -78,6 +78,11 @@ function shadingClassValues(): string[] {
 
 const SHADING_CLASS_VALUES = shadingClassValues();
 
+/** Escape a name for safe interpolation into a RegExp. */
+function escaped(name: string): string {
+  return name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 function readComponentsCss(): string {
   try {
     return readFileSync(join(process.cwd(), COMPONENTS_CSS), 'utf8');
@@ -119,14 +124,17 @@ function sourceFiles(): string[] {
  * pinned to the closed set of values, never to a bare `X--` prefix: a bare
  * prefix would treat any `X--*` class as rendered. The suffix values are parsed
  * at runtime from the ShadingClass union in src/types/index.ts so the pin cannot
- * drift.
+ * drift. Bare `X--` tokens (the static chunk of `prefix--${…}`) are dropped in
+ * add(), so an unrendered `X--*` rule can never match the set.
  */
 function collectTokens(text: string): { tokens: Set<string> } {
   const tokens = new Set<string>();
   const add = (raw: string) => {
     for (const tok of raw.split(/\s+/)) {
       const t = tok.replace(/^\.+/, '');
-      if (/^[a-z][a-z0-9-]*$/.test(t)) tokens.add(t);
+      // A bare `prefix--` token (the static chunk of `tz-cell--${…}`) is dropped:
+      // only the closed-set expansions are rendered.
+      if (/^[a-z][a-z0-9-]*$/.test(t) && !t.endsWith('--')) tokens.add(t);
     }
   };
   const addInner = (raw: string) => {
@@ -137,7 +145,8 @@ function collectTokens(text: string): { tokens: Set<string> } {
     add(m[1]!.replace(/\$\{[^}]*\}/g, ' '));
     addInner(m[1]!);
     // Closed set: expand each `prefix--${…}` dynamic suffix against the real values
-    // (parsed from the ShadingClass union) — never a bare `prefix--` token.
+    // (parsed from the ShadingClass union). A bare `prefix--` token is dropped in
+    // add() above, so only the closed-set classes and quoted strings are rendered.
     for (const mm of m[1]!.matchAll(/([a-z][a-z0-9-]*)--\$\{[A-Za-z_$][\w$]*\}/g)) {
       for (const v of SHADING_CLASS_VALUES) tokens.add(`${mm[1]}--${v}`);
     }
@@ -165,7 +174,7 @@ describe('dead CSS classes — components.css carries no dead rules', () => {
 
   it('removes every dead class the ticket names, plus the same-file dead ones found in the pass', () => {
     for (const dead of DEAD_CLASSES) {
-      expect(css, `components.css still defines .${dead}`).not.toMatch(new RegExp(`\\.${dead}\\b`));
+      expect(css, `components.css still defines .${dead}`).not.toMatch(new RegExp(`\\.${escaped(dead)}\\b`));
     }
   });
 
@@ -176,7 +185,7 @@ describe('dead CSS classes — components.css carries no dead rules', () => {
         // Class-like boundary on both sides: a real class reference (selector,
         // className, querySelector) never looks like `--spacing-time-axis-width`.
         expect(text, `${file} still references .${dead}`).not.toMatch(
-          new RegExp(`(^|[^-a-z0-9])${dead}([^-a-z0-9]|$)`, 'i'),
+          new RegExp(`(^|[^-a-z0-9])${escaped(dead)}([^-a-z0-9]|$)`, 'i'),
         );
       }
     }
