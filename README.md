@@ -6,7 +6,7 @@ straight to Google Calendar, Outlook, Gmail, or iCal.
 
 ## Live tool
 
-**👉 https://paulgresham.com/world-cal/**
+**👉 https://world.paulgresham.com/**
 
 ## Features
 
@@ -66,11 +66,12 @@ The app builds to a static `dist/` directory and runs as a small container.
     there is no tag to check.
 - **Caddy reverse proxy** — the app container serves on port 80 behind a
   Caddy reverse proxy; the example route lives in
-  `infra/Caddyfile.example`.
+  `infra/Caddyfile.example` (the `world.paulgresham.com` block). The
+  production Caddyfile on the VPS is maintained outside this repo.
 - **Assets** — `vite.config.ts` sets `base: './'`, so the build writes
   relative asset URLs (`./assets/…`) and the app serves from any path —
-  a `/world-cal/` subpath or a root domain. Relative asset resolution
-  still expects a trailing slash on the URL.
+  a root domain such as the `world.paulgresham.com` target. Relative asset
+  resolution still expects a trailing slash on the URL.
 
 ## Tech stack
 

@@ -2,6 +2,6 @@
 # The production Caddyfile is maintained on the VPS, not in this repo.
 # Add new apps by appending a similar block.
 
-world-cal.paulgresham.com {
+world.paulgresham.com {
     reverse_proxy world-cal:80
 }
