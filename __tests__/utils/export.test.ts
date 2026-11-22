@@ -97,9 +97,9 @@ describe('iCal content line folding', () => {
   });
 
   it('uses CRLF line endings and folds at code-point boundaries (multi-byte UTF-8)', () => {
-    // 61 non-ASCII octets from one 3-byte character plus ASCII padding: folding
-    // must not split a multi-byte sequence.
-    const longTitle = 'é'.repeat(61); // 183 octets
+    // 61 non-ASCII characters ('é', U+00E9 — 2 bytes each in UTF-8): 122 octets.
+    // Folding must not split a multi-byte sequence across lines.
+    const longTitle = 'é'.repeat(61); // 122 octets
     const links = generateExportLinks(selection, 'Europe/London', longTitle);
     const content = decodeICal(links.ical);
     expect(content).toContain('\r\n');

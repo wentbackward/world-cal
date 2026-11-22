@@ -8,6 +8,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { buildUrlQuery } from '../src/utils/url';
 
 const SRC = (p: string) => readFileSync(join(process.cwd(), p), 'utf8');
 
@@ -65,6 +66,33 @@ describe('url.ts — precomputed tz → short-code reverse map', () => {
     const body = url.slice(url.indexOf('export function buildUrlQuery'));
     expect(body).not.toMatch(/Object\.entries\(CITY_CODE_MAP\)/);
     expect(body).not.toMatch(/for\s*\(/);
+  });
+});
+
+describe('url.ts — behavior: tz → short-code round-trip', () => {
+  it('encodes a known tz by its short code (Europe/London → LON)', () => {
+    const query = buildUrlQuery({ primaryTz: 'Europe/London', secondaryTz: [] });
+    expect(new URLSearchParams(query).get('tz')).toBe('LON');
+  });
+
+  it('encodes every tz in the list by its short code', () => {
+    const query = buildUrlQuery({
+      primaryTz: 'Europe/London',
+      secondaryTz: ['Asia/Hong_Kong', 'America/New_York'],
+    });
+    expect(new URLSearchParams(query).get('tz')).toBe('LON,HKG,NYC');
+  });
+
+  it('uses first registration wins when a tz carries several short codes', () => {
+    // Australia/Sydney is registered as SYD then CBR: the first entry wins.
+    const query = buildUrlQuery({ primaryTz: 'Australia/Sydney', secondaryTz: [] });
+    expect(new URLSearchParams(query).get('tz')).toBe('SYD');
+  });
+
+  it('falls back to the IANA identifier when a tz has no short code', () => {
+    // Not present in CITY_CODE_MAP, so the precomputed map has no entry for it.
+    const query = buildUrlQuery({ primaryTz: 'Mars/Olympus_Mons', secondaryTz: [] });
+    expect(new URLSearchParams(query).get('tz')).toBe('Mars/Olympus_Mons');
   });
 });
 
