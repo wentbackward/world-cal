@@ -67,17 +67,20 @@ describe('getOffsetMs — hourCycle h24', () => {
   });
 
   // The real ICU emits hour "24" at local midnight under h24.
-  function midnightParts() {
+  function midnightParts(year = '2024', month = '06', day = '15') {
     return [
-      { type: 'year', value: '2024' },
-      { type: 'month', value: '06' },
-      { type: 'day', value: '15' },
+      { type: 'year', value: year },
+      { type: 'month', value: month },
+      { type: 'day', value: day },
       { type: 'hour', value: '24' },
       { type: 'minute', value: '00' },
       { type: 'second', value: '00' },
     ];
   }
 
+  // `seen` is only used by the options-pinning test (it captures the options the
+  // implementation requested, rather than asserting on behavior); it is absent
+  // from the behavior-assertion stubbed tests, which assert on the offset alone.
   function stubIntlWithParts(parts: Array<{ type: string; value: string }>, seen?: Array<Record<string, unknown>>) {
     vi.stubGlobal('Intl', {
       ...Intl,
@@ -107,6 +110,13 @@ describe('getOffsetMs — hourCycle h24', () => {
     // 00:00 in New York (EDT, -4) 2024-06-15 is 04:00Z — the same instant as the
     // behavioral midnight test; the "24" emission must normalize, not leak as 24:00.
     expect(getOffsetMs('America/New_York', new Date('2024-06-15T04:00:00Z'))).toBe(-4 * 60 * 60 * 1000);
+  });
+
+  it('normalizes hour 24 to 00 at winter (EST) midnight too', () => {
+    stubIntlWithParts(midnightParts('2024', '01', '15'));
+    // 00:00 in New York (EST, -5) 2024-01-15 is 05:00Z — the same winter instant as
+    // the behavioral EST midnight test; the "24" emission must normalize, not leak.
+    expect(getOffsetMs('America/New_York', new Date('2024-01-15T05:00:00Z'))).toBe(-5 * 60 * 60 * 1000);
   });
 });
 
