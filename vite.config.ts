@@ -12,8 +12,9 @@ import pkg from './package.json'
 // git. Untagged or git-less builds yield null — the footer omits the date
 // rather than guessing one.
 function releaseDate(): string | null {
+  // Validate strictly — a malformed value must never reach the footer.
   const injected = process.env.RELEASE_DATE?.trim()
-  if (injected) return injected
+  if (injected && /^\d{4}-\d{2}-\d{2}$/.test(injected)) return injected
   try {
     const tag = execSync('git describe --tags --abbrev=0', {
       encoding: 'utf8',

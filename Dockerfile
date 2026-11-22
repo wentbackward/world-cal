@@ -1,6 +1,6 @@
 # Build stage
-ARG RELEASE_DATE=
 FROM node:20-alpine AS builder
+ARG RELEASE_DATE=
 ENV RELEASE_DATE=$RELEASE_DATE
 WORKDIR /app
 COPY package*.json ./
