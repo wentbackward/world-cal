@@ -1,6 +1,5 @@
 import { useEffect } from 'react';
 import { AppStateProvider, useAppState } from './hooks/useAppState';
-import { ThemeProvider } from './hooks/useTheme';
 import { useUrlSync } from './hooks/useUrlSync';
 import { shouldIgnoreEscape } from './utils/escape';
 import Header from './components/Header';
@@ -39,10 +38,8 @@ function AppContent() {
 
 export default function App() {
   return (
-    <ThemeProvider>
-      <AppStateProvider>
-        <AppContent />
-      </AppStateProvider>
-    </ThemeProvider>
+    <AppStateProvider>
+      <AppContent />
+    </AppStateProvider>
   );
 }

@@ -1,5 +1,6 @@
 import type { HourRange, TimeRange } from '../types';
 import { CITY_CODE_MAP, getTimeZone } from '../lib/city-codes';
+import { getLocalTimezone } from './timezone';
 
 const DEFAULT_CORE: HourRange = { start: 8, end: 18 };
 const DEFAULT_EXT: HourRange = { start: 6, end: 22 };
@@ -136,17 +137,6 @@ export function getDefaultConfig(): {
     coreHours: { ...DEFAULT_CORE },
     extHours: { ...DEFAULT_EXT },
   };
-}
-
-/**
- * Detect the user's browser timezone.
- */
-function getLocalTimezone(): string {
-  try {
-    return Intl.DateTimeFormat().resolvedOptions().timeZone;
-  } catch {
-    return 'UTC';
-  }
 }
 
 function areEqualRanges(a: HourRange, b: HourRange): boolean {
