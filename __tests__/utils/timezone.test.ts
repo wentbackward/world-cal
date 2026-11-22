@@ -43,6 +43,13 @@ describe('getOffsetMs', () => {
     // Kathmandu is +5:45 year-round
     expect(getOffsetMs('Asia/Kathmandu', new Date('2024-06-15T12:00:00Z'))).toBe(5.75 * 60 * 60 * 1000);
   });
+
+  it('ignores sub-second fractions of the instant (floor to the truncated second)', () => {
+    // formatToParts truncates to whole seconds; the .500 fraction must not leak into the offset.
+    // New York is EDT (-4) in June.
+    expect(getOffsetMs('America/New_York', new Date('2024-06-15T12:00:00.500Z'))).toBe(-4 * 60 * 60 * 1000);
+    expect(getOffsetMs('America/New_York', new Date('2024-06-15T12:00:00.999Z'))).toBe(-4 * 60 * 60 * 1000);
+  });
 });
 
 describe('getLocalHour', () => {
