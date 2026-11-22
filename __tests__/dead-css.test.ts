@@ -203,5 +203,9 @@ describe('dead CSS classes — components.css carries no dead rules', () => {
       isReferenced('tz-cell--hypothetical', tokens),
       'a hypothetical tz-cell--<unknown> class must not be treated as rendered',
     ).toBe(false);
+    expect(
+      isReferenced('tz-cell--', tokens),
+      'a bare tz-cell-- token must not be treated as rendered',
+    ).toBe(false);
   });
 });
