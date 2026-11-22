@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
   getOffsetMs,
   formatTime,
@@ -61,6 +61,36 @@ describe('getLocalHour', () => {
   it('returns 0 at local midnight (hour 24 normalized to 0)', () => {
     // 2024-06-14T14:00:00Z is 00:00 in Sydney (AEST, UTC+10)
     expect(getLocalHour(new Date('2024-06-14T14:00:00Z'), 'Australia/Sydney')).toBe(0);
+  });
+
+  it('returns 0 at local midnight in a DST-observing zone (hour 24 with EDT)', () => {
+    // 2024-06-15T04:00:00Z is exactly 00:00 EDT (UTC-4) in New York — DST in effect.
+    expect(getLocalHour(new Date('2024-06-15T04:00:00Z'), 'America/New_York')).toBe(0);
+  });
+});
+
+describe('hour part guard', () => {
+  it('throws when formatToParts omits the hour part', () => {
+    vi.stubGlobal('Intl', {
+      ...Intl,
+      DateTimeFormat: class {
+        formatToParts() {
+          return [
+            { type: 'year', value: '2024' },
+            { type: 'month', value: '06' },
+            { type: 'day', value: '15' },
+            { type: 'minute', value: '00' },
+            { type: 'second', value: '00' },
+          ];
+        }
+      },
+    });
+    try {
+      expect(() => getLocalHour(new Date('2024-06-15T04:00:00Z'), 'America/New_York')).toThrow(/hour/);
+      expect(() => getOffsetMs('America/New_York', new Date('2024-06-15T12:00:00Z'))).toThrow(/hour/);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });
 
