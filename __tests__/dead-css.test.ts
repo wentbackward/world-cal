@@ -106,24 +106,40 @@ function sourceFiles(): string[] {
 }
 
 /**
- * Parse the dynamic suffix of a `tz-cell--${…}` template expression, brace-balanced so a
- * bare identifier (`${shading}`), a call (`${getShading(h)}`), a method call
- * (`${shading.trim()}`) or a nested-brace expression (`${cond ? {a: 'b'} : 'c'}`) is
- * recognised rather than mis-matched against a bare identifier. Returns the expression
- * text. The closed-set pin asserts the suffix IS a ShadingClass value; a template this
- * parser cannot balance must never be silently skipped (→ a misleading "tz-cell--core
- * must be rendered" failure) nor silently expanded (→ the closed set claiming a rendering
- * that never happened). Throws a named, actionable error in that case.
+ * Validate the brace-balance of the first `tz-cell--${…}` suffix in a template expression —
+ * a bare identifier (`${shading}`), a call (`${getShading(h)}`), a method call
+ * (`${shading.trim()}`), a nested-brace expression (`${cond ? {a: 'b'} : 'c'}`) or a
+ * brace inside a string literal (`${cond ? '}' : 'x'}`) all validate. Braces inside
+ * single/double-quoted string literals are not counted (backslash escapes honored). A
+ * template this parser cannot balance must never be silently skipped (→ a misleading
+ * "tz-cell--core must be rendered" failure) nor silently expanded (→ the closed set
+ * claiming a rendering that never happened); it throws a named, actionable error.
+ * Validate-only: this returns nothing — the pin expands the closed set because the call
+ * site (src/components/CalendarGrid.tsx) guarantees the suffix is a ShadingClass value;
+ * the parser does not (and does not claim to) assert that. Only the first
+ * `tz-cell--${` in a template is validated; one occurrence exists in the codebase today.
  */
-function parseTzCellSuffix(text: string): string {
+function parseTzCellSuffix(text: string): void {
   const braceAt = text.indexOf('{', text.indexOf('tz-cell--${'));
   let depth = 0;
+  let quote: "'" | '"' | null = null;
   for (let j = braceAt; j < text.length; j++) {
-    const c = text[j];
-    if (c === '{') depth++;
-    else if (c === '}') {
+    const c = text[j]!;
+    if (quote !== null) {
+      if (c === '\\') {
+        j++; // escape — the next character is literal
+        continue;
+      }
+      if (c === quote) quote = null;
+      continue;
+    }
+    if (c === "'" || c === '"') {
+      quote = c as "'" | '"';
+    } else if (c === '{') {
+      depth++;
+    } else if (c === '}') {
       depth--;
-      if (depth === 0) return text.slice(braceAt + 1, j);
+      if (depth === 0) return;
     }
   }
   throw new Error(
@@ -250,14 +266,18 @@ describe('dead CSS classes — components.css carries no dead rules', () => {
   });
 
   it('expands any brace-balanced tz-cell-- suffix expression against the closed ShadingClass set', () => {
-    // Synthetic inputs: a future `tz-cell--${getShading(h)}`, `tz-cell--${shading.trim()}`
-    // or a nested-brace expression must still expand the closed set — not fall back to
-    // "must be rendered", which would report the wrong problem. No real file contains
-    // either expression.
+    // Synthetic inputs: a future `tz-cell--${getShading(h)}`, `tz-cell--${shading.trim()}`,
+    // a nested-brace expression or a brace inside a string literal must still expand the
+    // closed set — not fall back to "must be rendered", which would report the wrong
+    // problem. No real file contains any of these expressions. Part-assembled (like the
+    // unbalanced test and the DEAD_CLASS_PARTS header) so this file's own dead-name scan
+    // and referencedRefs() self-scan cannot see the raw templates and satisfy the pin
+    // with the file's own text instead of the app's.
     for (const template of [
-      'className={`tz-cell--${getShading(localHour)}`}',
-      'className={`tz-cell--${shading.trim()}`}',
-      "className={`tz-cell--${cond ? {a: 'b'} : 'c'}`}",
+      ['className={`', 'tz-cell--', '${getShading(localHour)}', '`}'].join(''),
+      ['className={`', 'tz-cell--', '${shading.trim()}', '`}'].join(''),
+      ['className={`', 'tz-cell--', "${cond ? {a: 'b'} : 'c'}", '`}'].join(''),
+      ['className={`', 'tz-cell--', "${cond ? '}' : 'x'}", '`}'].join(''),
     ]) {
       const { tokens } = collectTokens(template);
       for (const v of SHADING_CLASS_VALUES) {
