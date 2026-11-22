@@ -1,4 +1,17 @@
 /**
+ * Fetch a named part from formatToParts output. The format guarantees the parts
+ * in practice; a missing one is a genuine bug, so fail loudly with the part
+ * named rather than let NaN leak into Date.UTC.
+ */
+function requiredPart(map: Record<string, string>, key: string): string {
+  const value = map[key];
+  if (value === undefined) {
+    throw new Error(`required part "${key}" missing from Intl formatToParts output`);
+  }
+  return value;
+}
+
+/**
  * Format time in a given timezone.
  */
 export function formatTime(date: Date, tz: string, locale: string = 'en-US'): string {
@@ -55,8 +68,9 @@ export function getLocalHour(date: Date, tz: string): number {
     hour: '2-digit',
     hourCycle: 'h24',
   }).formatToParts(date);
-  const hourPart = parts.find((p) => p.type === 'hour');
-  const hour = Number(hourPart?.value ?? '0');
+  const map: Record<string, string> = {};
+  for (const p of parts) map[p.type] = p.value;
+  const hour = Number(requiredPart(map, 'hour'));
   return hour === 24 ? 0 : hour;
 }
 
@@ -89,16 +103,22 @@ export function getOffsetMs(tz: string, date: Date): number {
 
   const map: Record<string, string> = {};
   for (const p of parts) map[p.type] = p.value;
+  const year = requiredPart(map, 'year');
+  const month = requiredPart(map, 'month');
+  const day = requiredPart(map, 'day');
+  const minute = requiredPart(map, 'minute');
+  const second = requiredPart(map, 'second');
   // Intl can emit hour "24" for midnight; normalize to 0.
-  const hour = map.hour === '24' ? '00' : map.hour!;
+  const rawHour = requiredPart(map, 'hour');
+  const hour = rawHour === '24' ? '00' : rawHour;
 
   const asUtc = Date.UTC(
-    Number(map.year),
-    Number(map.month) - 1,
-    Number(map.day),
+    Number(year),
+    Number(month) - 1,
+    Number(day),
     Number(hour),
-    Number(map.minute),
-    Number(map.second)
+    Number(minute),
+    Number(second)
   );
   // formatToParts truncates to whole seconds, so compare against the floored
   // reference instant rather than the raw caller value (which may carry ms).
