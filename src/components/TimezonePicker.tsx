@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, memo } from 'react';
+import { useState, useRef, useEffect, memo, useMemo } from 'react';
 import { useAppState } from '../hooks/useAppState';
 import { getAllTimeZones } from '../lib/city-codes';
 import { getOffsetLabel } from '../utils/timezone';
@@ -9,7 +9,8 @@ const TimezonePicker = memo(() => {
   const [search, setSearch] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const allTimeZones = getAllTimeZones();
+  // Static snapshot of the full list — computed once, not re-derived on every render.
+  const allTimeZones = useMemo(() => getAllTimeZones(), []);
   const usedTimeZones = new Set([state.primaryTz, ...state.secondaryTz]);
 
   const filtered = allTimeZones.filter((tz) => {

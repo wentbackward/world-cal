@@ -2,6 +2,16 @@ import type { HourRange, TimeRange } from '../types';
 import { CITY_CODE_MAP, getTimeZone } from '../lib/city-codes';
 import { getLocalTimezone } from './timezone';
 
+// tz -> short code, precomputed once at module init (first registration wins,
+// matching the original first-match scan). Stays a single source of truth
+// instead of scanning CITY_CODE_MAP for every tz on every buildUrlQuery call.
+const TZ_TO_SHORT_CODE: Record<string, string> = {};
+for (const entry of Object.values(CITY_CODE_MAP)) {
+  if (entry.shortCode !== undefined && TZ_TO_SHORT_CODE[entry.tz] === undefined) {
+    TZ_TO_SHORT_CODE[entry.tz] = entry.shortCode;
+  }
+}
+
 const DEFAULT_CORE: HourRange = { start: 8, end: 18 };
 const DEFAULT_EXT: HourRange = { start: 6, end: 22 };
 
@@ -84,15 +94,7 @@ export function buildUrlQuery(params: {
 
   // Timezone codes
   const allTz = [params.primaryTz, ...params.secondaryTz];
-  const codes = allTz
-    .map((tz) => {
-      // Reverse lookup: find short code
-      for (const [, entry] of Object.entries(CITY_CODE_MAP)) {
-        if (entry.tz === tz) return entry.shortCode;
-      }
-      return tz;
-    })
-    .join(',');
+  const codes = allTz.map((tz) => TZ_TO_SHORT_CODE[tz] ?? tz).join(',');
   segments.push(`tz=${codes}`);
 
   // Core hours (only if non-default)

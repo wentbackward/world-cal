@@ -1,12 +1,15 @@
 import { useAppState } from '../hooks/useAppState';
+import { getShortTzLabel } from '../utils/timezone';
+import TimezonePicker from './TimezonePicker';
+import ShareButton from './ShareButton';
 
 export default function Header() {
   const { state } = useAppState();
 
-  const primaryParts = state.primaryTz.split('/');
-  const primaryLabel = primaryParts.length > 1
-    ? (primaryParts[primaryParts.length - 1] ?? state.primaryTz).replace(/_/g, ' ')
-    : state.primaryTz;
+  // Both primary and secondary labels come from the same shared derivation —
+  // e.g. "America/New_York" -> "New York".
+  const primaryLabel = getShortTzLabel(state.primaryTz);
+  const secondaryLabels = state.secondaryTz.map(getShortTzLabel).join(', ');
 
   return (
     <header className="app-header">
@@ -30,10 +33,7 @@ export default function Header() {
             <>
               <span className="separator">·</span>
               <span className="secondary-tz" title="Secondary timezones">
-                {state.secondaryTz.map((tz) => {
-                  const parts = tz.split('/');
-                  return parts.length > 1 ? (parts[parts.length - 1] ?? tz).replace(/_/g, ' ') : tz;
-                }).join(', ')}
+                {secondaryLabels}
               </span>
             </>
           )}
@@ -47,6 +47,3 @@ export default function Header() {
     </header>
   );
 }
-
-import TimezonePicker from './TimezonePicker';
-import ShareButton from './ShareButton';
