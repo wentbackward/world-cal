@@ -102,12 +102,24 @@ jobs:
       contents: read
       packages: write
     steps:
-      # fetch-depth: 0 — vite.config.ts reads the most recent tag to stamp
-      # the release date in the build (untagged/shallow builds omit it).
+      # fetch-depth/fetch-tags — the release date is read here (not inside
+      # the Docker build, which runs from a git-URL context without tags)
+      # and passed to the builder as RELEASE_DATE.
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
           fetch-tags: true
+
+      - name: Compute the release date
+        id: release
+        run: |
+          TAG="$(git describe --tags --abbrev=0 2>/dev/null || true)"
+          DATE=""
+          if [ -n "$TAG" ]; then
+            DATE="$(git log -1 --format=%cs "$TAG" 2>/dev/null || true)"
+          fi
+          echo "date=$DATE" >> "$GITHUB_OUTPUT"
+          echo "Tag '$TAG' — release date '$DATE'"
 
       - name: Login to GHCR (automatic token)
         uses: docker/login-action@v3
@@ -120,6 +132,8 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           push: true
+          build-args: |
+            RELEASE_DATE=${{ steps.release.outputs.date }}
           tags: |
             ${{ env.IMAGE_TAG }}:latest
             ${{ env.IMAGE_TAG }}:${{ github.sha }}

@@ -6,10 +6,14 @@ import pkg from './package.json'
 // Release info injected at build time — the footer shows the version as
 // tagged, the release date of the most recent tag, and a link back to the
 // repo. The version is package.json's single source of truth; the date is
-// the most recent git tag's commit date (what the app is released as),
-// read from git at build time. Untagged or git-less builds yield null —
-// the footer omits the date rather than guessing one.
+// the most recent git tag's commit date (what the app is released as). In CI
+// the workflow passes RELEASE_DATE as a build arg (the Docker build context
+// is a git URL and the builder has no git); locally the date is read from
+// git. Untagged or git-less builds yield null — the footer omits the date
+// rather than guessing one.
 function releaseDate(): string | null {
+  const injected = process.env.RELEASE_DATE?.trim()
+  if (injected) return injected
   try {
     const tag = execSync('git describe --tags --abbrev=0', {
       encoding: 'utf8',
