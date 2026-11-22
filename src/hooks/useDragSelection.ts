@@ -156,15 +156,9 @@ export function useDragSelection(
     [clampCell, getCell, setDragState]
   );
 
-  const handlePointerUp = useCallback(
-    (e: React.PointerEvent<HTMLElement>) => {
-      if (activePointerIdRef.current === null || e.pointerId !== activePointerIdRef.current) return;
-      commit();
-    },
-    [commit]
-  );
-
-  const handlePointerCancel = useCallback(
+  // One release handler covers both pointerup and pointercancel: any release from the
+  // initiating pointer commits the drag (same as the window-level release path).
+  const handleRelease = useCallback(
     (e: React.PointerEvent<HTMLElement>) => {
       if (activePointerIdRef.current === null || e.pointerId !== activePointerIdRef.current) return;
       commit();
@@ -222,8 +216,8 @@ export function useDragSelection(
   const handlers: DragHandlers = {
     onPointerDown: handlePointerDown,
     onPointerMove: handlePointerMove,
-    onPointerUp: handlePointerUp,
-    onPointerCancel: handlePointerCancel,
+    onPointerUp: handleRelease,
+    onPointerCancel: handleRelease,
   };
 
   return {

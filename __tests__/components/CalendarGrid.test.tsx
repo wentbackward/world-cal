@@ -582,6 +582,24 @@ describe('pointer-event drag selection', () => {
     expect(container.querySelectorAll('.tz-cell--selected').length).toBe(2); // hour 8 x 2 timezone columns
   });
 
+  it('does not commit the cell activation after a cancelled drag in the vertical (narrow) layout (no-capture path)', () => {
+    const { container } = renderVerticalGrid();
+    const grid = container.querySelector('.v-cells') as HTMLElement;
+
+    // Vertical layout: hour-major, tz-minor — cell index = hour * 2 + tzIndex.
+    fireEvent.pointerDown(grid, { clientX: 5, clientY: 55, pointerId: 1, button: 0 });
+    fireEvent.keyDown(document.body, { key: 'Escape' });
+    expect(getOverlay(container)).toBeNull();
+    expect(latestSelection).toBeNull();
+
+    // The browser-native click the browser fires on the cell after pointerup.
+    fireEvent.pointerUp(grid, { clientX: 5, clientY: 55, pointerId: 1, button: 0 });
+    fireEvent.click(getCells(container)[5 * 2]!);
+
+    expect(latestSelection).toBeNull();
+    expect(container.querySelectorAll('.tz-cell--selected').length).toBe(0);
+  });
+
   it('does not clear the committed selection on a defaultPrevented Escape (app-level handler)', () => {
     const { container } = renderApp();
 
@@ -609,5 +627,15 @@ describe('pointer-event drag selection', () => {
     fireEvent.keyDown(cell, { key: 'Enter' });
 
     expectSelection(latestSelection, selectionForHourWindow(23));
+  });
+
+  it('selects the 23 -> 24 hour window (next day 00:00) through the click path for the last hour cell', () => {
+    const { container } = renderGrid();
+    const cell = getCells(container)[23]!;
+
+    fireEvent.click(cell);
+
+    expectSelection(latestSelection, selectionForHourWindow(23));
+    expect(container.querySelectorAll('.tz-cell--selected').length).toBe(2);
   });
 });
