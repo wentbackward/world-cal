@@ -28,7 +28,7 @@ function jobBlock(name: string): string {
   const end = rest.findIndex(
     (line, i) => i > 0 && (/^ {2}[A-Za-z0-9_-]+:/.test(line) || /^[A-Za-z_]/.test(line)),
   );
-  return end === -1 || end === 0 ? rest.join('\n') : rest.slice(0, end).join('\n');
+  return end === -1 ? rest.join('\n') : rest.slice(0, end).join('\n');
 }
 
 /**
@@ -120,6 +120,18 @@ const deployJob = jobBlock('deploy');
 describe('deploy workflow — job parsing', () => {
   it('fails loudly when a job name does not match', () => {
     expect(() => jobBlock('does-not-exist-job')).toThrow(/does-not-exist-job/);
+  });
+});
+
+describe('buildJobIf — fake-block self-test', () => {
+  it('throws loudly on a missing if:, an unsupported scalar, and an empty value', () => {
+    // A broken workflow must fail at the right place, not as a mismatched assertion
+    // on an empty block — pin every throw branch of the helper on fake blocks.
+    expect(() => buildJobIf('  build:\n    name: Build\n')).toThrow(/no 'if:' line/);
+    expect(() => buildJobIf('  build:\n    if: |\n      needs: x\n')).toThrow(/unsupported block scalar/);
+    expect(() => buildJobIf('  build:\n    if: >+\n      needs: x\n')).toThrow(/unsupported block scalar/);
+    expect(() => buildJobIf('  build:\n    if:\n')).toThrow(/has no value/);
+    expect(() => buildJobIf('  build:\n    if: >-\n')).toThrow(/has no value lines/);
   });
 });
 
