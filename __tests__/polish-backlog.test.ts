@@ -2,9 +2,8 @@
  * Polish backlog (ticket #16) — the review findings from #4.
  *
  * Each finding is a mechanical, comment-level polish item, so the tests pin the
- * comment's presence and shape directly. Behavior is pinned by the existing iCal
- * folding / escapeICal tests in __tests__/utils/export.test.ts and the source-shape
- * tests in __tests__/polish.test.ts.
+ * comment's presence and shape directly. Behavior is pinned by the iCal folding /
+ * escapeICal tests in __tests__/utils/export.test.ts; source-shape tests pin shape only.
  */
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
@@ -24,20 +23,32 @@ const polishTest = SRC(join('__tests__', 'polish.test.ts'));
 
 describe('polish backlog #16 — review findings re #4', () => {
   it('anchors the escapeICal mirror comment to the symbol name, not a stale line range', () => {
-    // The mirror lives in __tests__/utils/export.ts alongside the tests that use it;
+    // The mirror lives in __tests__/utils/export.test.ts alongside the tests that use it;
     // it must name the symbol it mirrors, not a line range that drifts as the file moves.
-    expect(exportTest).toMatch(/Mirror of the private escapeICal\b/);
-    expect(exportTest, 'mirror comment must not cite a line range').not.toMatch(/lines?\s*~?\d/i);
+    const anchorIndex = exportTest.indexOf('Mirror of the private escapeICal');
+    expect(anchorIndex, 'expected the escapeICal mirror comment anchored to the symbol name').toBeGreaterThan(-1);
+    // Scope the line-range check to the mirror-comment line itself — a legitimate
+    // line range in another comment of this file must not flip this test.
+    const mirrorComment = exportTest.slice(anchorIndex, exportTest.indexOf('\n', anchorIndex));
+    expect(mirrorComment, 'mirror comment must not cite a line range').not.toMatch(/lines?\s*~?\d/i);
   });
 
   it('states the continuation-budget invariant on the folding budget mutation', () => {
     const lines = exportSource.split('\n');
-    const mutationIndex = lines.findIndex((l) => /budget\s*=\s*74/.test(l));
-    expect(mutationIndex, 'expected a `budget = 74` mutation in foldICalLine').toBeGreaterThan(-1);
+    // Anchor on the `budget = 74` line that also carries the invariant comment —
+    // a similar future line without the comment is not the mutation.
+    const mutationIndex = lines.findIndex((l) => /budget\s*=\s*74/.test(l) && /continuation-budget invariant/i.test(l));
+    expect(mutationIndex, 'expected a `budget = 74` mutation in foldICalLine carrying the continuation-budget invariant comment').toBeGreaterThan(-1);
     expect(
       lines[mutationIndex],
       'the folding mutation must carry a comment stating the continuation-budget invariant (continuations hold ≤74 octets, + leading space = ≤75)'
     ).toMatch(/\/\/.*continuation-budget invariant.*75/i);
+    // Arithmetic pin: the line is " " + ≤74 octets (1 + 74 = 75). The CRLF is the
+    // separator and counts nothing toward the line.
+    expect(
+      lines[mutationIndex],
+      'the comment must state the leading-space octet, not the CRLF separator, in the line'
+    ).toMatch(/leading space[\s\S]*74/i);
   });
 
   it('notes that the polish tests encode source-shape, not behavior', () => {
