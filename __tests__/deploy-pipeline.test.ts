@@ -18,7 +18,7 @@ const packageJson = JSON.parse(readFileSync('package.json', 'utf8')) as {
 };
 
 /** Extract the block for one top-level job under `jobs:` (2-space indent). */
-export function jobBlock(name: string): string {
+function jobBlock(name: string): string {
   const lines = workflow.split('\n');
   const start = lines.findIndex((line) => line.startsWith(`  ${name}:`));
   if (start === -1) {
