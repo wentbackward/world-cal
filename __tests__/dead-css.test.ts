@@ -220,6 +220,21 @@ describe('dead CSS classes — components.css carries no dead rules', () => {
     }
   });
 
+  it('expands any brace-free tz-cell-- suffix expression against the closed ShadingClass set', () => {
+    // Synthetic inputs: a future `tz-cell--${getShading(h)}` or `tz-cell--${shading.trim()}`
+    // must still expand the closed set — not fall back to "must be rendered", which would
+    // report the wrong problem. No real file contains either expression.
+    for (const template of [
+      'className={`tz-cell--${getShading(localHour)}`}',
+      'className={`tz-cell--${shading.trim()}`}',
+    ]) {
+      const { tokens } = collectTokens(template);
+      for (const v of SHADING_CLASS_VALUES) {
+        expect(tokens.has(`tz-cell--${v}`), `tz-cell--${v} must be treated as rendered`).toBe(true);
+      }
+    }
+  });
+
   it('pins the dynamic tz-cell-- suffix to the closed ShadingClass set — a hypothetical suffix is unrendered', () => {
     const { tokens } = referencedRefs();
     for (const v of SHADING_CLASS_VALUES) {
