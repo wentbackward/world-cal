@@ -22,9 +22,10 @@ const exportSource = SRC(join('src', 'utils', 'export.ts'));
 const polishTest = SRC(join('__tests__', 'polish.test.ts'));
 
 // The line-range pin must catch the phrasing class a stale range takes ("line 137",
-// "lines ~137-141", "line numbers: ~137-141") — the phrasing class, not the exact words.
-// `\b` keeps "newlines" from matching; `[ \t]+` keeps the gap on one line.
-const LINE_RANGE_PATTERN = /\blines?(?:[ \t]+\w+)?[ \t]*:?[ \t]*~?[ \t]*\d/i;
+// "lines ~137-141", "line numbers: ~137-141", "export.ts:137-139") — the phrasing class,
+// not the exact words. `\b` keeps "newlines" from matching; `[ \t]+` keeps the gap on
+// one line; the path form is `\w+\.(?:ts|tsx):\d`.
+const LINE_RANGE_PATTERN = /\blines?(?:[ \t]+\w+)?[ \t]*:?[ \t]*~?[ \t]*\d|\w+\.(?:ts|tsx):\d/i;
 
 // Slice the `//` comment block that contains the anchor line, from the line start
 // through every consecutive `//` line — a stale range on a re-wrapped continuation
@@ -50,6 +51,9 @@ describe('polish backlog #16 — review findings re #4', () => {
     // must still contain the anchor, so a non-comment line can never vacate the check.
     const mirrorComment = sliceMirrorComment(exportTest, anchorIndex);
     expect(mirrorComment, 'mirror block slice must contain the anchor line').toContain('Mirror of the private escapeICal');
+    // The slice stops at the first non-comment line — the escapeICalForTest mirror below
+    // the block must not be swallowed into the check.
+    expect(mirrorComment, 'mirror block slice must stop at the first non-comment line').not.toContain('escapeICalForTest');
     expect(mirrorComment, 'mirror comment must not cite a line range').not.toMatch(LINE_RANGE_PATTERN);
   });
 
@@ -67,31 +71,15 @@ describe('polish backlog #16 — review findings re #4', () => {
     // separator and counts nothing toward the line.
     expect(
       lines[mutationIndex],
-      'the comment must state the leading-space octet, not the CRLF separator, in the line'
-    ).toMatch(/leading space[\s\S]*74/i);
+      'the comment must state the leading-space octet and the arithmetic (1 + 74 = 75), not the CRLF separator, in the line'
+    ).toMatch(/leading space[\s\S]*1\s*\+\s*74\s*=\s*75/i);
   });
 
   it('notes that the polish tests encode source-shape, not behavior', () => {
     expect(polishTest).toMatch(/source-shape/i);
   });
 
-  it('slices the mirror comment through the end of the comment block', () => {
-    // If the mirror comment is ever re-wrapped onto two lines, a stale range on
-    // the continuation line must not silently pass — one-line slicing only
-    // covers the anchor line.
-    const fake = [
-      '// Mirror of the private escapeICal in src/utils/export.ts: commas, semicolons, backslashes escaped.',
-      '// continuation line: lines ~137-141',
-      'const escapeICalForTest = (str: string): string => str;',
-      '',
-    ].join('\n');
-    const anchorIndex = fake.indexOf('Mirror of the private escapeICal');
-    const block = sliceMirrorComment(fake, anchorIndex);
-    expect(block, 'the comment block slice must include the continuation line').toContain('lines ~137-141');
-    expect(block, 'the comment block slice must stop at the first non-comment line').not.toContain('escapeICalForTest');
-  });
-
-  it('rejects line ranges described with words before the digit', () => {
+  it('matches the line-range phrasing class (word, range and path forms)', () => {
     // The stale ranges live in this phrasing class; all of these must match.
     for (const phrasing of [
       'line 137',
@@ -99,11 +87,14 @@ describe('polish backlog #16 — review findings re #4', () => {
       'line numbers: ~137-141',
       'line numbers:137',
       'line range 137',
+      'export.ts:137-139',
+      'it lives at export.ts:137-139',
+      'export.tsx:137',
     ]) {
       expect(phrasing, `expected "${phrasing}" to match the line-range pattern`).toMatch(LINE_RANGE_PATTERN);
     }
     // Digit-free phrasings must not fire.
-    for (const phrasing of ['the lines above', 'lines below', 'line numbers are described in the doc']) {
+    for (const phrasing of ['the lines above', 'lines below', 'line numbers are described in the doc', 'the export.ts file', 'export.ts']) {
       expect(phrasing, `expected "${phrasing}" to NOT match the line-range pattern`).not.toMatch(LINE_RANGE_PATTERN);
     }
   });
