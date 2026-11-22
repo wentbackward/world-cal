@@ -59,8 +59,8 @@ export function getShortTzLabel(tz: string): string {
 
 /**
  * Get the local hour in a given timezone for a Date, as a number in 0-23.
- * Built on formatToParts (hourCycle "h24"), which emits midnight as hour "24";
- * normalized to 0.
+ * Built on formatToParts (hourCycle "h24"); midnight emits hour "24" in some
+ * ICUs and "00" in others — normalized to 0 either way.
  */
 export function getLocalHour(date: Date, tz: string): number {
   const parts = new Intl.DateTimeFormat('en-US', {
@@ -98,7 +98,7 @@ export function getOffsetMs(tz: string, date: Date): number {
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit',
-    hour12: false,
+    hourCycle: 'h24',
   }).formatToParts(date);
 
   const map: Record<string, string> = {};
@@ -108,7 +108,7 @@ export function getOffsetMs(tz: string, date: Date): number {
   const day = requiredPart(map, 'day');
   const minute = requiredPart(map, 'minute');
   const second = requiredPart(map, 'second');
-  // Intl can emit hour "24" for midnight; normalize to 0.
+  // hourCycle "h24" emits hour "24" for midnight in some ICUs; normalize to 0.
   const rawHour = requiredPart(map, 'hour');
   const hour = rawHour === '24' ? '00' : rawHour;
 
