@@ -167,6 +167,8 @@ All visual styling is controlled via CSS custom properties (CSS variables) defin
 
 ### CSS Variables
 
+> Historical values from the original design pass — `styles/variables.css` is the live source of truth. Three variables here were **removed** in the #13 dead-CSS pass: `--color-grid-today-bg`, `--color-btn-secondary`, `--spacing-cell-height`. Three others listed — `--color-grid-border`, `--color-grid-header-bg`, `--spacing-tz-header-width` — **never existed** in `variables.css`. All six are annotated below.
+
 ```css
 :root {
   /* Shading */
@@ -179,9 +181,9 @@ All visual styling is controlled via CSS custom properties (CSS variables) defin
   --color-selection-border: #3b82f6;
 
   /* Grid */
-  --color-grid-border: #e5e7eb;
-  --color-grid-header-bg: #f9fafb;
-  --color-grid-today-bg: #eff6ff;  /* today column highlight */
+  --color-grid-border: #e5e7eb;  /* never existed in variables.css */
+  --color-grid-header-bg: #f9fafb;  /* never existed in variables.css */
+  --color-grid-today-bg: #eff6ff;  /* today column highlight — REMOVED in the #13 pass */
 
   /* Typography */
   --color-text-primary: #111827;
@@ -195,13 +197,13 @@ All visual styling is controlled via CSS custom properties (CSS variables) defin
   /* Buttons */
   --color-btn-primary: #3b82f6;
   --color-btn-primary-hover: #2563eb;
-  --color-btn-secondary: #e5e7eb;
+  --color-btn-secondary: #e5e7eb;  /* REMOVED in the #13 pass */
   --color-btn-secondary-hover: #d1d5db;
 
   /* Spacing */
-  --spacing-cell-height: 32px;     /* height of each half-hour row */
+  --spacing-cell-height: 32px;     /* height of each half-hour row — REMOVED in the #13 pass */
   --spacing-time-axis-width: 50px; /* width of left time labels */
-  --spacing-tz-header-width: 120px;
+  --spacing-tz-header-width: 120px;  /* never existed in variables.css */
 }
 ```
 
