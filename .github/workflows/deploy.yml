@@ -21,7 +21,7 @@ on:
   workflow_dispatch:
 
 env:
-  IMAGE_TAG: ghcr.io/wentbackward/world_cal
+  IMAGE_TAG: ghcr.io/wentbackward/world-cal
 
 jobs:
   # ── Stage 1: Unit Tests (lightweight gate — runs on every trigger) ──
