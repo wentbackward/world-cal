@@ -49,7 +49,7 @@ Delete, in one pass:
 - `TIMEZONE_COLORS` from `src/components/constants.ts`
 - `src/styles/grid.css` (empty placeholder — or delete the import if the file is empty)
 - `useTheme.tsx` / `ThemeProvider` / `Theme` context (dead — nothing ever sets a theme)
-- `getLocalHour`, `sortTimezonesByOffset` (unused by components — remove along with `getTzOffset` per §2)
+- `sortTimezonesByOffset` (unused by components — remove along with `getTzOffset` per §2); `getLocalHour` is kept and consumed by `CalendarGrid` (deliberate exception per §2 — see docs/DECISIONS.md, issue #2)
 - Duplicate `:root` color definitions in `App.css` (keep the single source in `styles/variables.css`)
 - Duplicate `getLocalTimezone` (keep one in `utils/timezone.ts`)
 

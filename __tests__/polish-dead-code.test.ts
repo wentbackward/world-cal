@@ -121,3 +121,29 @@ describe('polish dead-code — the getLocalHour decision is a short line plus a 
     }
   });
 });
+
+describe('polish dead-code — §3 dead-code removal bullet does not list getLocalHour for removal', () => {
+  const spec = SRC(SPEC);
+  const lines = spec.split('\n');
+  const start = lines.findIndex((l) => l.trim().startsWith('### 3.'));
+  expect(start, 'expected a spec section starting with "### 3."').toBeGreaterThan(-1);
+  const end = lines.findIndex((l, i) => i > start && l.trim().startsWith('### '));
+  const section = lines.slice(start, end === -1 ? lines.length : end).join('\n');
+  const bullet = section.split('\n').find((l) => l.includes('`getLocalHour`'));
+
+  it('mentions getLocalHour in the §3 removal list', () => {
+    expect(bullet, 'expected a §3 bullet mentioning `getLocalHour`').toBeDefined();
+  });
+
+  it('does not list getLocalHour as a deletion target (kept and consumed by CalendarGrid)', () => {
+    expect(bullet).toMatch(/getLocalHour/);
+    const clause = bullet!.slice(bullet!.indexOf('`getLocalHour`'));
+    expect(clause, 'the getLocalHour clause must not read as a removal target').not.toMatch(/remove|delete/i);
+    expect(clause, 'the getLocalHour clause must name the keep-and-consume decision').toMatch(/(kept|consumed|stays|exception|retained)/i);
+  });
+
+  it('keeps sortTimezonesByOffset as the dead removal target', () => {
+    expect(bullet).toMatch(/sortTimezonesByOffset/);
+    expect(bullet).toMatch(/remove/i);
+  });
+});
