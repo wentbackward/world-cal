@@ -21,17 +21,54 @@ const packageJson = JSON.parse(readFileSync('package.json', 'utf8')) as {
 function jobBlock(name: string): string {
   const lines = workflow.split('\n');
   const start = lines.findIndex((line) => line.startsWith(`  ${name}:`));
-  if (start === -1) return '';
+  if (start === -1) {
+    throw new Error(`job '${name}' not found in .github/workflows/deploy.yml`);
+  }
   const rest = lines.slice(start);
   const end = rest.findIndex(
     (line, i) => i > 0 && (/^ {2}[A-Za-z0-9_-]+:/.test(line) || /^[A-Za-z_]/.test(line)),
   );
-  return end === -1 || end === 0 ? rest.join('\n') : rest.slice(0, end).join('\n');
+  return end === -1 ? rest.join('\n') : rest.slice(0, end).join('\n');
+}
+
+/**
+ * Extract the build job's `if:` value, unfolding a multi-line block scalar
+ * the way YAML folds it (lines joined with a single space). Throws loudly on
+ * a missing job/`if:` or an unsupported scalar — a broken workflow must fail
+ * at the right place, not as a mismatched assertion on an empty block.
+ */
+function buildJobIf(block: string): string {
+  const lines = block.split('\n');
+  const idx = lines.findIndex((line) => /^\s*if:/.test(line));
+  if (idx === -1) throw new Error(`build job has no 'if:' line`);
+  const line = lines[idx] ?? '';
+  const indent = /^\s*/.exec(line)?.[0].length ?? 0;
+  const rest = line.slice(line.indexOf('if:') + 3).trim();
+  if (/^>-?$/.test(rest)) {
+    const parts: string[] = [];
+    for (let i = idx + 1; i < lines.length; i++) {
+      const candidate = lines[i] ?? '';
+      if (candidate.trim() === '') break; // blank line ends the scalar (defensive)
+      const match = /^(\s*)(.*)$/.exec(candidate);
+      if (!match || (match[1]?.length ?? 0) <= indent) break;
+      parts.push((match[2] ?? '').trim());
+    }
+    if (parts.length === 0) throw new Error(`build job's 'if: >-' has no value lines`);
+    return parts.join(' ');
+  }
+  if (/^[>|]/.test(rest)) {
+    throw new Error(`build job's 'if:' uses an unsupported block scalar '${rest}'`);
+  }
+  if (rest === '') throw new Error(`build job's 'if:' has no value`);
+  return rest;
 }
 
 /** Extract the `run: |` bash body of the version-check job (10-space indent). */
 function versionCheckBash(): string {
   const jobStart = workflow.indexOf('  version-check:');
+  if (jobStart === -1) {
+    throw new Error(`job 'version-check' not found in .github/workflows/deploy.yml`);
+  }
   const rest = workflow.slice(jobStart);
   const lines = rest.split('\n');
   const runLine = lines.findIndex((line) => /^\s*run: \|$/.test(line));
@@ -80,6 +117,24 @@ const versionCheckJob = jobBlock('version-check');
 const buildJob = jobBlock('build');
 const deployJob = jobBlock('deploy');
 
+describe('deploy workflow — job parsing', () => {
+  it('fails loudly when a job name does not match', () => {
+    expect(() => jobBlock('does-not-exist-job')).toThrow(/does-not-exist-job/);
+  });
+});
+
+describe('buildJobIf — fake-block self-test', () => {
+  it('throws loudly on a missing if:, an unsupported scalar, and an empty value', () => {
+    // A broken workflow must fail at the right place, not as a mismatched assertion
+    // on an empty block — pin every throw branch of the helper on fake blocks.
+    expect(() => buildJobIf('  build:\n    name: Build\n')).toThrow(/no 'if:' line/);
+    expect(() => buildJobIf('  build:\n    if: |\n      needs: x\n')).toThrow(/unsupported block scalar/);
+    expect(() => buildJobIf('  build:\n    if: >+\n      needs: x\n')).toThrow(/unsupported block scalar/);
+    expect(() => buildJobIf('  build:\n    if:\n')).toThrow(/has no value/);
+    expect(() => buildJobIf('  build:\n    if: >-\n')).toThrow(/has no value lines/);
+  });
+});
+
 describe('deploy workflow — triggers', () => {
   it('triggers the lightweight gate on main pushes, tag pushes, PRs and manual dispatch', () => {
     expect(onBlock).toContain('branches: [main]');
@@ -98,11 +153,13 @@ describe('deploy workflow — triggers', () => {
     expect(testJob).not.toMatch(/docker|login-action|build-push-action|ssh-action/);
   });
 
-  it('keeps the full pipeline behind stable tags + workflow_dispatch only', () => {
-    expect(buildJob).toMatch(/if:/);
-    expect(buildJob).toContain("github.event_name == 'workflow_dispatch'");
-    expect(buildJob).toContain(
-      "startsWith(github.ref, 'refs/tags/')",
+  it('pins the build job if: to the exact stable-tag + workflow_dispatch condition', () => {
+    // The folded block scalar is the whole point of the rewrite (easier to
+    // review); the value itself must stay byte-identical to the guard that
+    // keeps a candidate/mismatched tag from reaching the live deploy.
+    expect(buildJob).toMatch(/if:\s*>-/);
+    expect(buildJobIf(buildJob)).toBe(
+      "needs.test.result == 'success' && (github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') && needs.version-check.outputs.ok == 'true'))",
     );
   });
 
@@ -124,6 +181,10 @@ describe('deploy workflow — version gate', () => {
   it('pins Node 20 via setup-node (the gate does not rely on the runner pre-installed node)', () => {
     expect(versionCheckJob).toContain('actions/setup-node@v4');
     expect(versionCheckJob).toContain('node-version: 20');
+  });
+
+  it('configures no npm cache (the job installs no dependencies, so the cache would never hit)', () => {
+    expect(versionCheckJob).not.toMatch(/cache:\s*npm/);
   });
 
   it('rejects mismatched tags with a non-zero exit', () => {
